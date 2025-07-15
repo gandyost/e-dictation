@@ -372,15 +372,21 @@
         }        // Firebase 초기화 대기
         function waitForFirebase() {
             return new Promise((resolve, reject) => {
+                // 교사용 접근인 경우 Firebase 대기 시간을 단축하고 실패해도 계속 진행
+                const maxAttempts = studentSession.isTeacherView ? 10 : 50; // 교사용은 2초, 일반은 10초
                 let attempts = 0;
-                const maxAttempts = 50; // 10초 대기
                 
                 const checkFirebase = () => {
                     if (window.db && window.auth) {
                         console.log('Firebase 초기화 완료');
                         resolve();
                     } else if (attempts >= maxAttempts) {
-                        reject(new Error('Firebase 초기화 타임아웃'));
+                        if (studentSession.isTeacherView) {
+                            console.warn('교사용 접근 - Firebase 초기화 시간 초과, 샘플 데이터로 진행');
+                            resolve(); // 교사용은 실패해도 계속 진행
+                        } else {
+                            reject(new Error('Firebase 초기화 타임아웃'));
+                        }
                     } else {
                         attempts++;
                         setTimeout(checkFirebase, 200);
@@ -389,15 +395,24 @@
                 
                 checkFirebase();
             });
-        }
-
-        // 결과 초기화
+        }        // 결과 초기화
         async function initializeResult() {
             try {
                 document.getElementById('loadingSpinner').style.display = 'flex';
                 
                 // Firebase 초기화 대기
-                await waitForFirebase();
+                try {
+                    await waitForFirebase();
+                } catch (firebaseError) {
+                    console.error('Firebase 초기화 실패:', firebaseError);
+                    if (studentSession.isTeacherView) {
+                        console.log('교사용 접근 - Firebase 없이 샘플 데이터로 진행');
+                        showTeacherSampleResult('Firebase 연결 실패');
+                        return;
+                    } else {
+                        throw firebaseError;
+                    }
+                }
                 
                 // 테스트 및 참여자 데이터 로드
                 await loadResultData();
@@ -409,33 +424,39 @@
                 renderSuggestions();
                 
                 document.getElementById('loadingSpinner').style.display = 'none';
-                document.getElementById('resultContent').classList.remove('hidden');
-                  } catch (error) {
+                document.getElementById('resultContent').classList.remove('hidden');            } catch (error) {
                 console.error('결과 로드 오류:', error);
                 
-                // 교사용 접근인 경우 더 구체적인 오류 메시지
+                // 교사용 접근인 경우 더 구체적인 오류 메시지 및 샘플 데이터 표시
                 if (studentSession.isTeacherView) {
                     console.error('교사용 접근 오류 상세:', {
                         testCode: studentSession.testCode,
                         participantId: studentSession.participantId,
                         error: error.message
                     });
-                    alert(`결과를 불러오는 중 오류가 발생했습니다:\n\n테스트 코드: ${studentSession.testCode}\n참여자 ID: ${studentSession.participantId}\n오류: ${error.message}\n\n가능한 원인:\n1. 테스트 코드가 존재하지 않음\n2. 참여자가 테스트를 완료하지 않음\n3. Firebase 연결 문제`);
+                    
+                    // 교사용 접근에서는 샘플 데이터로 대체하여 UI 표시
+                    console.log('교사용 접근 - 샘플 데이터로 결과 표시');
+                    showTeacherSampleResult(error.message);
+                    return;
                 } else {
                     alert('결과를 불러오는 중 오류가 발생했습니다: ' + error.message);
+                    window.location.href = '../index.html';
                 }
-                
-                window.location.href = '../index.html';
             }
         }        // 결과 데이터 로드
         async function loadResultData() {
             console.log('결과 데이터 로드 시작');
             console.log('학생 세션:', studentSession);
-            
-            try {
+              try {
                 // Firebase 연결 확인
                 if (!window.db) {
-                    throw new Error('Firebase 데이터베이스가 초기화되지 않았습니다.');
+                    if (studentSession.isTeacherView) {
+                        console.warn('교사용 접근 - Firebase 없음, 샘플 데이터 사용');
+                        throw new Error('Firebase 데이터베이스가 초기화되지 않았습니다. (교사용 샘플 모드)');
+                    } else {
+                        throw new Error('Firebase 데이터베이스가 초기화되지 않았습니다.');
+                    }
                 }
                 
                 // 테스트 데이터 로드
@@ -994,6 +1015,57 @@
                 return;
             }
         })();
+
+        // 교사용 샘플 결과 표시 (데이터 로드 실패 시)
+        function showTeacherSampleResult(errorMessage) {
+            // 샘플 데이터 생성
+            testData = {
+                title: `테스트 (${studentSession.testCode})`,
+                sentences: [
+                    { text: "Hello world" },
+                    { text: "Good morning" },
+                    { text: "Thank you" }
+                ]
+            };
+            
+            participantData = {
+                name: `학생 (${studentSession.participantId})`,
+                studentId: studentSession.participantId,
+                status: 'unknown',
+                finalScore: 0,
+                correctAnswers: 0,
+                answers: [],
+                completedAt: new Date(),
+                duration: 0
+            };
+            
+            // 오류 메시지 표시
+            document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('resultContent').classList.remove('hidden');
+            
+            // 오류 안내 추가
+            const errorBanner = document.createElement('div');
+            errorBanner.className = 'bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mb-6';
+            errorBanner.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <div>
+                        <p class="font-semibold">데이터 로드 오류</p>
+                        <p class="text-sm">${errorMessage}</p>
+                        <p class="text-sm mt-1">교사용 미리보기 모드로 표시됩니다.</p>
+                    </div>
+                </div>
+            `;
+            
+            const resultContent = document.getElementById('resultContent');
+            resultContent.insertBefore(errorBanner, resultContent.firstChild);
+            
+            // UI 렌더링
+            renderResultSummary();
+            renderDetailedStats();
+            renderAnswersList();
+            renderSuggestions();
+        }
     </script>
 </body>
 </html>

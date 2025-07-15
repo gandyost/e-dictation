@@ -1649,8 +1649,41 @@
     <script src="../js/teacher.js"></script>
     <script src="../js/export.js"></script>
     -->
-    
-    <script>
+      <script>
+        // 필수 함수들 정의
+        
+        // 사용자 문서 확인 및 생성
+        async function ensureUserDocument(uid, email, displayName) {
+            try {
+                const userRef = db.collection('users').doc(uid);
+                const userDoc = await userRef.get();
+                
+                if (!userDoc.exists) {
+                    console.log('새 사용자 문서 생성 중...', uid, displayName);
+                    await userRef.set({
+                        uid: uid,
+                        email: email,
+                        displayName: displayName || '선생님',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        testCodes: []
+                    });
+                    console.log('사용자 문서 생성 완료:', uid, displayName);
+                } else {
+                    console.log('기존 사용자 문서 업데이트...', uid, displayName);
+                    // 기존 사용자는 displayName만 업데이트 (빈 값이 아닌 경우)
+                    if (displayName && displayName.trim() !== '') {
+                        await userRef.update({
+                            displayName: displayName
+                        });
+                        console.log('사용자 displayName 업데이트 완료:', uid, displayName);
+                    }
+                }
+            } catch (error) {
+                console.error('사용자 문서 생성/업데이트 오류:', error);
+                throw error;
+            }
+        }
+
         // 자동 새로고침 설정
         function setupAutoRefresh() {
             const intervalSelect = document.getElementById('refreshInterval');
