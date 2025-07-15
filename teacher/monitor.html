@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="../css/styles.css">
     <link rel="stylesheet" href="../css/teacher.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -218,31 +218,7 @@
                     </div>
                     <i class="fas fa-chart-line text-2xl text-purple-400"></i>
                 </div>
-            </div>
-        </div>
-
-        <!-- 실시간 통계 차트 -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <!-- 진행률 분포 차트 -->
-            <div class="bg-white rounded-lg shadow-sm border p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">
-                    <i class="fas fa-chart-bar text-blue-500 mr-2"></i>진행률 분포
-                </h3>
-                <div class="h-64">
-                    <canvas id="progressChart"></canvas>
-                </div>
-            </div>
-
-            <!-- 점수 분포 차트 -->
-            <div class="bg-white rounded-lg shadow-sm border p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">
-                    <i class="fas fa-chart-pie text-green-500 mr-2"></i>점수 분포
-                </h3>
-                <div class="h-64">
-                    <canvas id="scoreDistributionChart"></canvas>
-                </div>
-            </div>
-        </div>
+            </div>        </div>
 
         <!-- 필터 및 정렬 -->
         <div class="bg-white rounded-lg shadow-sm border p-4 mb-6">
