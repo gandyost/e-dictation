@@ -269,9 +269,7 @@
                                 <div id="audioProgressBar" class="bg-white h-2 rounded-full transition-all duration-1000" style="width: 0%"></div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- 추가 컨트롤 -->
+                    </div>                    <!-- 추가 컨트롤 -->
                     <div class="flex justify-center space-x-4 mt-4">
                         <button id="speedSlowBtn" class="text-white/70 hover:text-white text-sm">
                             <i class="fas fa-backward mr-1"></i>느리게
@@ -412,11 +410,11 @@
         let maxPlayCount = 3;
         let testStartTime = null;
         let testTimer = null;
-        let timeLimit = 30; // 기본 30분
-        let currentSpeechRate = 1.0;
+        let timeLimit = 30; // 기본 30분        
+        let currentSpeechRate = 0.8; // 기본 속도를 '느리게'로 변경 (기존 느리게였던 속도)
         let currentUtterance = null;
         let isTestPaused = false; // 테스트 일시정지 상태
-        let playCountStorage = {}; // 문제별 재생 횟수 저장        // 세션 데이터
+        let playCountStorage = {}; // 문제별 재생 횟수 저장// 세션 데이터
         let studentSession = JSON.parse(sessionStorage.getItem('studentSession') || '{}');        // 페이지 로드 시 초기화
         document.addEventListener('DOMContentLoaded', function() {
             console.log('=== DOMContentLoaded 이벤트 발생 ===');
@@ -1059,11 +1057,10 @@
             
             // 음성 재생
             document.getElementById('playButton').addEventListener('click', playCurrentSentence);
-            
-            // 속도 조절
-            document.getElementById('speedSlowBtn').addEventListener('click', () => setSpeechRate(0.8));
-            document.getElementById('speedNormalBtn').addEventListener('click', () => setSpeechRate(1.0));
-            document.getElementById('speedFastBtn').addEventListener('click', () => setSpeechRate(1.2));
+              // 속도 조절
+            document.getElementById('speedSlowBtn').addEventListener('click', () => setSpeechRate(0.6));
+            document.getElementById('speedNormalBtn').addEventListener('click', () => setSpeechRate(0.8));
+            document.getElementById('speedFastBtn').addEventListener('click', () => setSpeechRate(1.0));
             
             // 답안 제출
             document.getElementById('submitAnswerBtn').addEventListener('click', submitAnswer);
@@ -1529,11 +1526,8 @@
             
             // 답안 입력란 초기화
             document.getElementById('answerInput').value = answers[index] || '';
-            
-            // 버튼 상태 업데이트
+              // 버튼 상태 업데이트
             updateNavigationButtons();
-            
-            console.log(`문제 ${index + 1} 로드됨:`, sentence.text);
         }
 
         // 네비게이션 버튼 상태 업데이트
@@ -1679,14 +1673,13 @@
                 btn.classList.remove('border-b', 'border-white/50');
                 btn.classList.add('text-white/70');
             });
-            
-            if (rate === 0.8) {
+              if (rate === 0.6) {
                 document.getElementById('speedSlowBtn').classList.add('border-b', 'border-white/50');
                 document.getElementById('speedSlowBtn').classList.remove('text-white/70');
-            } else if (rate === 1.0) {
+            } else if (rate === 0.8) {
                 document.getElementById('speedNormalBtn').classList.add('border-b', 'border-white/50');
                 document.getElementById('speedNormalBtn').classList.remove('text-white/70');
-            } else if (rate === 1.2) {
+            } else if (rate === 1.0) {
                 document.getElementById('speedFastBtn').classList.add('border-b', 'border-white/50');
                 document.getElementById('speedFastBtn').classList.remove('text-white/70');
             }

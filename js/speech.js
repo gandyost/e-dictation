@@ -467,17 +467,15 @@ class SpeechManager {
                 this.onProgress = null;
                 break;
         }
-    }
-
-    // 음성 설정 프리셋
+    }    // 음성 설정 프리셋
     getPresets() {
         return {
-            slow: { rate: 0.7, pitch: 1.0 },
-            normal: { rate: 1.0, pitch: 1.0 },
-            fast: { rate: 1.3, pitch: 1.0 },
-            clear: { rate: 0.9, pitch: 1.1 },
-            deep: { rate: 0.9, pitch: 0.8 },
-            high: { rate: 1.0, pitch: 1.2 }
+            slow: { rate: 0.6, pitch: 1.0 },     // 새로운 '느리게' 속도
+            normal: { rate: 0.8, pitch: 1.0 },   // 새로운 '보통' 속도 (기존 느리게)
+            fast: { rate: 1.0, pitch: 1.0 },     // 새로운 '빠르게' 속도 (기존 보통)
+            clear: { rate: 0.7, pitch: 1.1 },
+            deep: { rate: 0.7, pitch: 0.8 },
+            high: { rate: 0.8, pitch: 1.2 }
         };
     }
 
