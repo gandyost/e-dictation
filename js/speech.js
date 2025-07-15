@@ -39,17 +39,25 @@ class SpeechManager {
         };
 
         return support;
-    }
-
-    // 음성 목록 초기화
+    }    // 음성 목록 초기화
     initializeVoices() {
         const loadVoices = () => {
             this.voices = this.synthesis.getVoices();
             
             // 영어 음성만 필터링
             this.englishVoices = this.voices.filter(voice => 
-                voice.lang.startsWith('en')
+                voice.lang.toLowerCase().startsWith('en')
             );
+
+            // 모바일 환경에서 음성 품질 개선을 위한 정렬
+            this.englishVoices.sort((a, b) => {
+                const aScore = this.getVoiceQualityScore(a);
+                const bScore = this.getVoiceQualityScore(b);
+                return bScore - aScore;
+            });
+
+            console.log(`영어 음성 ${this.englishVoices.length}개 로드됨:`, 
+                this.englishVoices.map(v => `${v.name} (${v.lang})`));
         };
 
         loadVoices();
@@ -58,6 +66,41 @@ class SpeechManager {
         if (this.synthesis.onvoiceschanged !== undefined) {
             this.synthesis.onvoiceschanged = loadVoices;
         }
+    }
+
+    // 음성 품질 점수 계산 (모바일 최적화)
+    getVoiceQualityScore(voice) {
+        let score = 0;
+        const name = voice.name.toLowerCase();
+        const lang = voice.lang.toLowerCase();
+
+        // 언어 우선순위
+        if (lang === 'en-us') score += 100;
+        else if (lang === 'en-gb') score += 90;
+        else if (lang.startsWith('en')) score += 50;
+
+        // 음성 품질 키워드
+        if (name.includes('enhanced')) score += 50;
+        if (name.includes('premium')) score += 45;
+        if (name.includes('neural')) score += 40;
+        if (name.includes('natural')) score += 35;
+        if (name.includes('high quality')) score += 30;
+        if (voice.default) score += 20;
+
+        // 모바일 환경 특화
+        const userAgent = navigator.userAgent.toLowerCase();
+        if (userAgent.includes('mobile') || userAgent.includes('android') || userAgent.includes('iphone')) {
+            // iOS Safari의 경우
+            if (userAgent.includes('safari') && !userAgent.includes('chrome')) {
+                if (name.includes('samantha') || name.includes('alex')) score += 25;
+            }
+            // Android Chrome의 경우
+            if (userAgent.includes('chrome') && userAgent.includes('android')) {
+                if (name.includes('google') || name.includes('tts')) score += 25;
+            }
+        }
+
+        return score;
     }
 
     // 음성 목록 가져오기
@@ -79,9 +122,7 @@ class SpeechManager {
         });
 
         return recommended.length > 0 ? recommended : this.englishVoices.slice(0, 3);
-    }
-
-    // 텍스트 음성 합성
+    }    // 텍스트 음성 합성
     speak(text, settings = {}) {
         if (!this.isSupported.synthesis) {
             throw new Error('음성 합성을 지원하지 않는 브라우저입니다.');
@@ -100,13 +141,20 @@ class SpeechManager {
         this.currentUtterance.volume = config.volume;
         this.currentUtterance.lang = config.lang;
 
-        // 음성 선택
+        // 음성 선택 (모바일 환경 개선)
         if (config.voice) {
             const selectedVoice = this.voices.find(voice => 
                 voice.name === config.voice || voice.voiceURI === config.voice
             );
             if (selectedVoice) {
                 this.currentUtterance.voice = selectedVoice;
+            }
+        } else {
+            // 최적 영어 음성 자동 선택
+            const bestVoice = this.getBestEnglishVoice();
+            if (bestVoice) {
+                this.currentUtterance.voice = bestVoice;
+                console.log('자동 선택된 음성:', bestVoice.name, bestVoice.lang);
             }
         }
 
@@ -126,6 +174,14 @@ class SpeechManager {
             this.isPlaying = false;
             this.currentUtterance = null;
             if (this.onError) this.onError(event);
+            
+            // 모바일 환경에서 오류 발생 시 폴백 처리
+            if (event.error === 'synthesis-failed' || event.error === 'voice-unavailable') {
+                console.warn('음성 합성 오류, 기본 설정으로 재시도:', event.error);
+                setTimeout(() => {
+                    this.speakWithFallback(text, config);
+                }, 100);
+            }
         };
 
         this.currentUtterance.onboundary = (event) => {
@@ -142,6 +198,43 @@ class SpeechManager {
         this.synthesis.speak(this.currentUtterance);
         
         return this.currentUtterance;
+    }
+
+    // 최적 영어 음성 선택
+    getBestEnglishVoice() {
+        if (!this.englishVoices || this.englishVoices.length === 0) {
+            return null;
+        }
+        return this.englishVoices[0]; // 이미 품질 순으로 정렬됨
+    }
+
+    // 폴백 음성 재생
+    speakWithFallback(text, config) {
+        const fallbackUtterance = new SpeechSynthesisUtterance(text);
+        fallbackUtterance.lang = 'en-US';
+        fallbackUtterance.rate = config.rate || 1.0;
+        fallbackUtterance.pitch = config.pitch || 1.0;
+        fallbackUtterance.volume = config.volume || 1.0;
+        // 음성은 지정하지 않고 브라우저 기본값 사용
+        
+        fallbackUtterance.onstart = () => {
+            this.isPlaying = true;
+            if (this.onStart) this.onStart();
+        };
+
+        fallbackUtterance.onend = () => {
+            this.isPlaying = false;
+            if (this.onEnd) this.onEnd();
+        };
+
+        fallbackUtterance.onerror = (event) => {
+            this.isPlaying = false;
+            console.error('폴백 음성도 실패:', event.error);
+            if (this.onError) this.onError(event);
+        };
+
+        this.synthesis.speak(fallbackUtterance);
+        this.currentUtterance = fallbackUtterance;
     }
 
     // 음성 일시정지
@@ -533,30 +626,47 @@ const SpeechUtils = {
             .replace(/\s+/g, ' ') // 연속된 공백 제거
             .replace(/([.!?])\s*([A-Z])/g, '$1 $2') // 문장 사이 공백 확보
             .trim();
-    },
-
-    // 브라우저별 음성 호환성 확인
+    },    // 브라우저별 음성 호환성 확인
     checkBrowserCompatibility() {
         const userAgent = navigator.userAgent;
         const compatibility = {
             browser: 'unknown',
+            isMobile: false,
             synthesisSupport: 'speechSynthesis' in window,
             recognitionSupport: 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window,
-            qualityRating: 'medium'
+            qualityRating: 'medium',
+            recommendations: []
         };
+        
+        // 모바일 환경 감지
+        compatibility.isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
         
         if (userAgent.includes('Chrome')) {
             compatibility.browser = 'Chrome';
             compatibility.qualityRating = 'high';
+            if (compatibility.isMobile && userAgent.includes('Android')) {
+                compatibility.recommendations.push('Google TTS 엔진 사용 권장');
+            }
         } else if (userAgent.includes('Firefox')) {
             compatibility.browser = 'Firefox';
             compatibility.qualityRating = 'medium';
+            compatibility.recommendations.push('음성 품질이 제한적일 수 있습니다');
         } else if (userAgent.includes('Safari')) {
             compatibility.browser = 'Safari';
             compatibility.qualityRating = 'medium';
+            if (compatibility.isMobile) {
+                compatibility.recommendations.push('iOS 설정에서 영어 음성 활성화 확인');
+                compatibility.recommendations.push('Siri 음성을 영어로 설정하면 품질이 향상됩니다');
+            }
         } else if (userAgent.includes('Edge')) {
             compatibility.browser = 'Edge';
             compatibility.qualityRating = 'high';
+        }
+
+        // 모바일 특화 권장사항
+        if (compatibility.isMobile) {
+            compatibility.recommendations.push('음성 재생 전 사용자 상호작용이 필요할 수 있습니다');
+            compatibility.recommendations.push('헤드폰 사용 시 음질이 개선됩니다');
         }
         
         return compatibility;

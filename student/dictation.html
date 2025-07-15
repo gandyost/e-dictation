@@ -631,32 +631,51 @@
                 
                 // Firebase db 객체 확인
                 if (typeof db === 'undefined') {
+                    console.error('❌ Firebase 데이터베이스가 초기화되지 않았습니다.');
+                    alert('❌ Firebase 연결 실패: 데이터베이스가 초기화되지 않았습니다.');
                     throw new Error('Firebase 데이터베이스가 초기화되지 않았습니다.');
                 }
                 
                 // studentSession 확인
                 if (!studentSession || !studentSession.testCode) {
-                    console.warn('세션 정보가 불완전합니다. 샘플 데이터로 대체합니다.');
+                    console.error('❌ 세션 정보가 불완전합니다:', {
+                        hasSession: !!studentSession,
+                        testCode: studentSession?.testCode,
+                        participantId: studentSession?.participantId
+                    });
+                    alert('❌ 세션 정보 오류: 테스트 코드가 없습니다. 다시 입력해주세요.');
                     // 샘플 데이터로 테스트 진행
                     await initializeSampleTest();
                     return;
                 }
-                
-                console.log('테스트 코드로 문서 조회 시작:', studentSession.testCode);
+                  console.log('🔍 테스트 코드로 문서 조회 시작:', studentSession.testCode);
                 
                 // 테스트 데이터 로드 시도
                 try {
                     const testDoc = await db.collection('tests').doc(studentSession.testCode).get();
-                    console.log('테스트 문서 조회 완료. exists:', testDoc.exists);
+                    console.log('📄 테스트 문서 조회 완료. exists:', testDoc.exists);
                     
                     if (!testDoc.exists) {
-                        console.warn('테스트 문서가 존재하지 않습니다. 샘플 데이터로 대체합니다.');
+                        console.error('❌ 테스트 문서가 존재하지 않습니다. 코드:', studentSession.testCode);
+                        alert(`❌ 테스트를 찾을 수 없습니다.\n입력한 코드: ${studentSession.testCode}\n\n코드를 다시 확인해주세요.`);
                         await initializeSampleTest();
                         return;
                     }
                     
                     testData = testDoc.data();
-                    console.log('테스트 데이터 로드 완료:', testData);
+                    console.log('✅ 테스트 데이터 로드 완료:', {
+                        title: testData.title,
+                        sentenceCount: testData.sentences?.length || 0,
+                        isActive: testData.isActive
+                    });
+                    
+                    // 테스트가 비활성화되어 있는지 확인
+                    if (!testData.isActive) {
+                        console.error('❌ 비활성화된 테스트입니다.');
+                        alert('❌ 이 테스트는 현재 비활성화되어 있습니다.');
+                        await initializeSampleTest();
+                        return;
+                    }
 
                     // 참여자 데이터는 테스트 문서의 participants 필드에서 가져오기
                     const participants = testData.participants || {};
@@ -676,9 +695,9 @@
 
                     // UI 초기화
                     await initializeUI();
-                    
-                } catch (firebaseError) {
-                    console.warn('Firebase 연결 실패:', firebaseError);
+                      } catch (firebaseError) {
+                    console.error('❌ Firebase 연결 실패:', firebaseError);
+                    alert(`❌ Firebase 연결 실패: ${firebaseError.message}\n\n샘플 테스트로 진행됩니다.`);
                     console.log('샘플 데이터로 테스트 진행합니다.');
                     await initializeSampleTest();
                     return;
@@ -686,24 +705,29 @@
                 
                 hideLoading();
                 console.log('=== 테스트 초기화 완료 ===');
-                  
-            } catch (error) {
-                console.error('테스트 초기화 오류:', error);
+                    } catch (error) {
+                console.error('❌ 테스트 초기화 오류:', error);
+                alert(`❌ 테스트 초기화 실패: ${error.message}\n\n샘플 테스트로 진행됩니다.`);
                 console.log('샘플 데이터로 테스트를 시도합니다.');
                 
                 try {
                     await initializeSampleTest();
                 } catch (sampleError) {
-                    console.error('샘플 테스트 초기화도 실패:', sampleError);
-                    alert('테스트 초기화에 실패했습니다. 페이지를 새로고침하거나 관리자에게 문의하세요.');
+                    console.error('❌ 샘플 테스트 초기화도 실패:', sampleError);
+                    alert('❌ 테스트 초기화에 실패했습니다. 페이지를 새로고침하거나 관리자에게 문의하세요.');
                     hideLoading();
                 }
             }
-        }
-
-        // 샘플 테스트 데이터로 초기화
+        }        // 샘플 테스트 데이터로 초기화
         async function initializeSampleTest() {
-            console.log('=== 샘플 테스트 초기화 ===');
+            console.log('⚠️ === 샘플 테스트 초기화 === ⚠️');
+            console.warn('주의: 실제 테스트 데이터를 불러오지 못해 5문제 샘플 테스트로 진행됩니다.');
+            
+            // 사용자에게 알림
+            if (studentSession && studentSession.testCode && studentSession.testCode !== 'SAMPLE_TEST') {
+                console.warn(`원래 요청된 테스트 코드: ${studentSession.testCode}`);
+                alert(`⚠️ 원래 테스트 코드(${studentSession.testCode})를 불러올 수 없어 5문제 샘플 테스트로 진행됩니다.\n\n실제 테스트를 원하신다면:\n1. 테스트 코드가 정확한지 확인\n2. 테스트가 활성화되어 있는지 확인\n3. 인터넷 연결 상태 확인\n4. 선생님께 문의`);
+            }
             
             // 샘플 테스트 데이터
             testData = {
@@ -1075,6 +1099,9 @@
                 }
             });            // 키보드 단축키
             document.addEventListener('keydown', handleKeyPress);
+
+            // 음성 시스템 초기화 및 호환성 체크
+            initializeSpeechSystem();
               // 페이지 언로드 시 진행 상황 저장 (다양한 이벤트 감지)
             let isUnloading = false;
             
@@ -1532,9 +1559,7 @@
                     submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
                 }
             }
-        }
-
-        // 현재 문장 음성 재생
+        }        // 현재 문장 음성 재생
         function playCurrentSentence() {
             if (!testData || !testData.sentences || currentQuestionIndex >= testData.sentences.length) {
                 console.error('재생할 문장이 없습니다.');
@@ -1554,35 +1579,92 @@
                 // 기존 음성 중지
                 window.speechSynthesis.cancel();
 
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'en-US';
-                utterance.rate = currentSpeechRate;
-                utterance.pitch = 1;
-                utterance.volume = 1;
-
-                utterance.onstart = () => {
-                    document.getElementById('audioStatus').textContent = '재생 중...';
-                    document.getElementById('playButton').innerHTML = '<i class="fas fa-pause text-2xl"></i>';
-                };
-
-                utterance.onend = () => {
-                    document.getElementById('audioStatus').textContent = '재생 완료';
-                    document.getElementById('playButton').innerHTML = '<i class="fas fa-play text-2xl"></i>';
+                // 음성 목록이 로드될 때까지 대기 (모바일 브라우저 대응)
+                const playWithVoice = () => {
+                    const utterance = new SpeechSynthesisUtterance(text);
                     
-                    // 재생 횟수 증가
-                    incrementCurrentQuestionPlayCount();
-                    playCount = getCurrentQuestionPlayCount();
-                    document.getElementById('playCount').textContent = playCount;
+                    // 기본 설정
+                    utterance.lang = 'en-US';
+                    utterance.rate = currentSpeechRate;
+                    utterance.pitch = 1;
+                    utterance.volume = 1;
+
+                    // 영어 음성 선택 (모바일 환경 개선)
+                    const voices = window.speechSynthesis.getVoices();
+                    let selectedVoice = null;
+
+                    // 우선순위: 영어 음성 선택
+                    const englishVoices = voices.filter(voice => 
+                        voice.lang.toLowerCase().startsWith('en')
+                    );
+
+                    if (englishVoices.length > 0) {
+                        // 더 나은 품질의 영어 음성을 우선 선택
+                        selectedVoice = englishVoices.find(voice => {
+                            const name = voice.name.toLowerCase();
+                            const lang = voice.lang.toLowerCase();
+                            return (
+                                (lang === 'en-us' || lang === 'en-gb') &&
+                                (name.includes('enhanced') || name.includes('premium') || 
+                                 name.includes('neural') || name.includes('natural') || 
+                                 voice.default)
+                            );
+                        }) || englishVoices[0]; // 적절한 음성이 없으면 첫 번째 영어 음성 사용
+                    }
+
+                    // 선택된 음성 적용
+                    if (selectedVoice) {
+                        utterance.voice = selectedVoice;
+                        console.log('선택된 음성:', selectedVoice.name, selectedVoice.lang);
+                    } else {
+                        console.warn('영어 음성을 찾을 수 없습니다. 기본 음성을 사용합니다.');
+                    }
+
+                    utterance.onstart = () => {
+                        document.getElementById('audioStatus').textContent = '재생 중...';
+                        document.getElementById('playButton').innerHTML = '<i class="fas fa-pause text-2xl"></i>';
+                    };
+
+                    utterance.onend = () => {
+                        document.getElementById('audioStatus').textContent = '재생 완료';
+                        document.getElementById('playButton').innerHTML = '<i class="fas fa-play text-2xl"></i>';
+                        
+                        // 재생 횟수 증가
+                        incrementCurrentQuestionPlayCount();
+                        playCount = getCurrentQuestionPlayCount();
+                        document.getElementById('playCount').textContent = playCount;
+                    };
+
+                    utterance.onerror = (event) => {
+                        console.error('음성 재생 오류:', event.error);
+                        document.getElementById('audioStatus').textContent = '재생 오류';
+                        document.getElementById('playButton').innerHTML = '<i class="fas fa-play text-2xl"></i>';
+                        
+                        // 오류 발생 시 다시 시도 (다른 음성으로)
+                        if (selectedVoice) {
+                            console.log('다른 음성으로 재시도...');
+                            const fallbackUtterance = new SpeechSynthesisUtterance(text);
+                            fallbackUtterance.lang = 'en-US';
+                            fallbackUtterance.rate = currentSpeechRate;
+                            window.speechSynthesis.speak(fallbackUtterance);
+                        }
+                    };
+
+                    window.speechSynthesis.speak(utterance);
+                    currentUtterance = utterance;
                 };
 
-                utterance.onerror = (event) => {
-                    console.error('음성 재생 오류:', event.error);
-                    document.getElementById('audioStatus').textContent = '재생 오류';
-                    document.getElementById('playButton').innerHTML = '<i class="fas fa-play text-2xl"></i>';
-                };
-
-                window.speechSynthesis.speak(utterance);
-                currentUtterance = utterance;
+                // 음성 목록이 아직 로드되지 않은 경우 대기
+                const voices = window.speechSynthesis.getVoices();
+                if (voices.length === 0) {
+                    // 음성 목록 로드 대기
+                    window.speechSynthesis.onvoiceschanged = () => {
+                        playWithVoice();
+                        window.speechSynthesis.onvoiceschanged = null; // 한 번만 실행
+                    };
+                } else {
+                    playWithVoice();
+                }
             } else {
                 alert('이 브라우저는 음성 기능을 지원하지 않습니다.');
             }
@@ -1608,18 +1690,67 @@
                 document.getElementById('speedFastBtn').classList.add('border-b', 'border-white/50');
                 document.getElementById('speedFastBtn').classList.remove('text-white/70');
             }
-        }
-
-        // 오디오 테스트
+        }        // 오디오 테스트
         function testAudio() {
             if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance('오디오 테스트입니다.');
-                utterance.lang = 'ko-KR';
-                utterance.rate = 1;
-                utterance.pitch = 1;
-                utterance.volume = 1;
+                // 기존 음성 중지
+                window.speechSynthesis.cancel();
 
-                window.speechSynthesis.speak(utterance);
+                const testWithVoice = () => {
+                    const utterance = new SpeechSynthesisUtterance('Audio test. This is an English pronunciation test.');
+                    utterance.lang = 'en-US';
+                    utterance.rate = 1;
+                    utterance.pitch = 1;
+                    utterance.volume = 1;
+
+                    // 영어 음성 선택
+                    const voices = window.speechSynthesis.getVoices();
+                    const englishVoices = voices.filter(voice => 
+                        voice.lang.toLowerCase().startsWith('en')
+                    );
+
+                    if (englishVoices.length > 0) {
+                        const selectedVoice = englishVoices.find(voice => {
+                            const name = voice.name.toLowerCase();
+                            const lang = voice.lang.toLowerCase();
+                            return (
+                                (lang === 'en-us' || lang === 'en-gb') &&
+                                (name.includes('enhanced') || name.includes('premium') || 
+                                 name.includes('neural') || name.includes('natural') || 
+                                 voice.default)
+                            );
+                        }) || englishVoices[0];
+
+                        if (selectedVoice) {
+                            utterance.voice = selectedVoice;
+                            console.log('테스트 음성:', selectedVoice.name, selectedVoice.lang);
+                        }
+                    }
+
+                    utterance.onstart = () => {
+                        console.log('오디오 테스트 시작');
+                    };
+
+                    utterance.onend = () => {
+                        console.log('오디오 테스트 완료');
+                    };
+
+                    utterance.onerror = (event) => {
+                        console.error('오디오 테스트 오류:', event.error);
+                        // 폴백: 기본 설정으로 재시도
+                        const fallbackUtterance = new SpeechSynthesisUtterance('Audio test');
+                        fallbackUtterance.lang = 'en-US';
+                        window.speechSynthesis.speak(fallbackUtterance);
+                    };
+
+                    window.speechSynthesis.speak(utterance);
+                };
+
+                // 음성 목록이 비동기적으로 로드되는 경우를 대비
+                if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                    window.speechSynthesis.onvoiceschanged = testWithVoice;
+                }
+                testWithVoice();
             } else {
                 alert('이 브라우저는 음성 기능을 지원하지 않습니다.');
             }
@@ -1652,7 +1783,7 @@
 
         // 다음 문제
         function nextQuestion() {
-            if (currentQuestionIndex < testData.sentences.length - 1) {
+            if (currentQuestionIndex < testData.sentences.length -  1) {
                 loadQuestion(currentQuestionIndex + 1);
                 updateProgress();
             }
