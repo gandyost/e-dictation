@@ -1,0 +1,1717 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 모니터링 - 영어 받아쓰기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/teacher.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <style>
+        .participant-card {
+            transition: all 0.3s ease;
+        }
+        .participant-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.3s ease;
+        }
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-online { background-color: #10b981; }
+        .status-away { background-color: #f59e0b; }
+        .status-offline { background-color: #ef4444; }
+        .status-testing { background-color: #3b82f6; }
+        .status-completed { background-color: #8b5cf6; }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .auto-refresh-indicator {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .detailed-answers-section {
+            transition: all 0.3s ease;
+        }
+        .answer-item {
+            transition: all 0.2s ease;
+        }
+        .answer-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }        .btn-secondary {
+            background-color: #6b7280;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563;
+        }
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+        .all-answers-section {
+            transition: all 0.3s ease;
+        }
+        .recent-answers .answer-item {
+            margin-bottom: 0.5rem;
+        }
+        .modal-content {
+            max-height: 90vh;
+        }
+        .modal-body {
+            max-height: calc(90vh - 120px);
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 헤더 -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="dashboard.html" class="text-blue-600 hover:text-blue-800 mr-4">
+                        <i class="fas fa-arrow-left"></i> 대시보드로 돌아가기
+                    </a>
+                    <h1 class="text-xl font-semibold text-gray-900">실시간 모니터링</h1>
+                    <div id="autoRefreshIndicator" class="auto-refresh-indicator ml-4 px-3 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                        <i class="fas fa-sync-alt"></i> 자동 새로고침
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2">
+                        <label class="text-sm font-medium text-gray-700">새로고침 간격:</label>
+                        <select id="refreshInterval" class="text-sm border border-gray-300 rounded px-2 py-1">
+                            <option value="5">5초</option>
+                            <option value="10" selected>10초</option>
+                            <option value="30">30초</option>
+                            <option value="60">1분</option>
+                            <option value="0">수동</option>
+                        </select>
+                    </div>
+                    <span id="teacherName" class="text-gray-700"></span>
+                    <button id="logoutBtn" class="btn-secondary">로그아웃</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <!-- 테스트 정보 헤더 -->
+        <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h2 id="testTitle" class="text-2xl font-bold text-gray-900 mb-3">테스트 제목</h2>
+                    
+                    <!-- 테스트 코드 섹션 - 강조 표시 -->
+                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <i class="fas fa-key text-blue-600 text-lg"></i>
+                                <div>
+                                    <label class="text-sm font-medium text-blue-800 block">테스트 코드</label>
+                                    <span id="testCode" class="text-2xl font-mono font-bold text-blue-700 tracking-wider"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button id="copyTestCodeBtn" class="inline-flex items-center px-3 py-2 border border-blue-300 rounded-md text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                                    <i class="fas fa-copy mr-2"></i>
+                                    복사
+                                </button>
+                                <div id="copyTestCodeSuccess" class="hidden text-green-600 text-sm font-medium">
+                                    <i class="fas fa-check mr-1"></i>복사됨!
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-blue-600 text-sm mt-2">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            학생들은 이 코드로 테스트에 참여할 수 있습니다
+                        </p>
+                    </div>
+                    
+                    <p id="testDescription" class="text-gray-500">테스트 설명</p>
+                </div>
+                <div class="flex items-center space-x-4 ml-6">
+                    <div class="text-center">
+                        <div id="lastUpdated" class="text-sm text-gray-500">마지막 업데이트</div>
+                        <div id="lastUpdatedTime" class="text-xs text-gray-400"></div>
+                    </div>
+                    <button id="refreshNowBtn" class="btn-secondary">
+                        <i class="fas fa-sync-alt"></i> 새로고침
+                    </button>
+                    <button id="exportDataBtn" class="btn-primary">
+                        <i class="fas fa-download"></i> 데이터 내보내기
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 통계 카드 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div class="stats-card rounded-lg p-6 text-white">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-white/80 text-sm font-medium">총 참여자</p>
+                        <p id="totalParticipants" class="text-3xl font-bold">0</p>
+                    </div>
+                    <i class="fas fa-users text-2xl text-white/60"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm border p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">테스트 중</p>
+                        <p id="activeParticipants" class="text-3xl font-bold text-blue-600">0</p>
+                    </div>
+                    <i class="fas fa-play text-2xl text-blue-400"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm border p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">완료</p>
+                        <p id="completedParticipants" class="text-3xl font-bold text-green-600">0</p>
+                    </div>
+                    <i class="fas fa-check text-2xl text-green-400"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm border p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">평균 점수</p>
+                        <p id="averageScore" class="text-3xl font-bold text-purple-600">0%</p>
+                    </div>
+                    <i class="fas fa-chart-line text-2xl text-purple-400"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- 실시간 통계 차트 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- 진행률 분포 차트 -->
+            <div class="bg-white rounded-lg shadow-sm border p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-chart-bar text-blue-500 mr-2"></i>진행률 분포
+                </h3>
+                <div class="h-64">
+                    <canvas id="progressChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 점수 분포 차트 -->
+            <div class="bg-white rounded-lg shadow-sm border p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-chart-pie text-green-500 mr-2"></i>점수 분포
+                </h3>
+                <div class="h-64">
+                    <canvas id="scoreDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 필터 및 정렬 -->
+        <div class="bg-white rounded-lg shadow-sm border p-4 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-4">
+                    <div>
+                        <label for="statusFilter" class="text-sm font-medium text-gray-700 mr-2">상태 필터:</label>
+                        <select id="statusFilter" class="border border-gray-300 rounded px-3 py-1 text-sm">
+                            <option value="all">전체</option>
+                            <option value="joined">참여</option>
+                            <option value="in-progress">진행 중</option>
+                            <option value="completed">완료</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="sortBy" class="text-sm font-medium text-gray-700 mr-2">정렬:</label>
+                        <select id="sortBy" class="border border-gray-300 rounded px-3 py-1 text-sm">
+                            <option value="joinedAt">참여 시간</option>
+                            <option value="progress">진행률</option>
+                            <option value="score">점수</option>
+                            <option value="name">이름</option>
+                            <option value="studentId">학번</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="text" id="searchInput" placeholder="이름 또는 학번 검색..." 
+                           class="border border-gray-300 rounded px-3 py-1 text-sm w-48">
+                    <button id="clearSearchBtn" class="btn-secondary text-sm px-3">지우기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 참여자 목록 -->
+        <div class="bg-white rounded-lg shadow-sm border">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">참여자 현황</h3>
+            </div>
+            
+            <div id="participantsList" class="divide-y divide-gray-200">
+                <!-- 참여자 카드들이 동적으로 추가됩니다 -->
+            </div>
+            
+            <!-- 빈 상태 -->
+            <div id="emptyState" class="text-center py-12 text-gray-500 hidden">
+                <i class="fas fa-users text-4xl mb-4 text-gray-300"></i>
+                <p>아직 참여한 학생이 없습니다.</p>
+                <p class="text-sm mt-2">학생들이 테스트 코드를 입력하면 여기에 표시됩니다.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- 참여자 상세 모달 -->
+    <div id="participantModal" class="modal">
+        <div class="modal-content max-w-4xl max-h-screen overflow-y-auto">
+            <div class="modal-header">
+                <h3 id="participantModalTitle">참여자 상세 정보</h3>
+                <button id="closeParticipantModal" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="participantDetails">
+                    <!-- 상세 정보가 동적으로 생성됩니다 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Firebase 모듈 버전을 제거하고 compat 버전만 사용
+    </script>
+
+    <script>
+        // Firebase compat 버전 사용
+        const firebaseConfig = {
+            apiKey: "AIzaSyBlWpLtgheMHHShh_ZOE43PD_zhfi3i-mo",
+            authDomain: "e-dictation-d679a.firebaseapp.com",
+            projectId: "e-dictation-d679a",
+            storageBucket: "e-dictation-d679a.firebasestorage.app",
+            messagingSenderId: "585034180982",
+            appId: "1:585034180982:web:f5ff6fcee0c04a6bf6b257",
+            measurementId: "G-W8TB4B8VNQ"
+        };
+
+        // Firebase 초기화 (compat 버전)
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        let currentTestCode = null;
+        let currentTestData = null;
+        let participants = [];
+        let refreshInterval = null;
+        let unsubscribeParticipants = null;
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            // URL에서 테스트 코드 가져오기
+            const urlParams = new URLSearchParams(window.location.search);
+            currentTestCode = urlParams.get('code');
+            
+            console.log('URL 파라미터에서 가져온 테스트 코드:', currentTestCode);
+            
+            if (!currentTestCode) {
+                console.error('테스트 코드가 URL에 없습니다.');
+                alert('테스트 코드가 없습니다.');
+                window.location.href = 'dashboard.html';
+                return;
+            }
+
+            // 테스트 코드를 즉시 표시 (인증 대기 없이)
+            document.getElementById('testCode').textContent = currentTestCode;
+            console.log('테스트 코드 즉시 표시:', currentTestCode);
+
+            // 인증 확인을 지연시켜서 Firebase가 완전히 로드되도록 함
+            setTimeout(() => {
+                initializeAuthentication();
+            }, 1500); // 1.5초 지연
+
+            initializeEventListeners();
+        });
+
+        // 인증 초기화 함수
+        function initializeAuthentication() {
+            console.log('인증 초기화 시작');
+            
+            // localStorage에서 인증 상태 확인
+            const storedAuthState = localStorage.getItem('authState');
+            if (storedAuthState) {
+                try {
+                    const authData = JSON.parse(storedAuthState);
+                    const isRecent = (Date.now() - authData.timestamp) < 300000; // 5분 이내
+                      if (authData.authenticated && isRecent) {
+                        console.log('localStorage에서 최근 인증 상태 확인됨:', authData.userEmail);
+                        document.getElementById('teacherName').textContent = authData.userName || authData.userEmail;
+                        
+                        // Firebase 인증 확인도 병행하되, localStorage 정보로 일단 진행
+                        setTimeout(async () => {
+                            const currentUser = auth.currentUser;
+                            if (currentUser) {
+                                console.log('Firebase 인증도 확인됨');
+                                await setupUserInfo(currentUser);
+                                initializeMonitoring();
+                            } else {
+                                console.log('Firebase 인증 대기 중...');
+                                waitForFirebaseAuth();
+                            }
+                        }, 1000);
+                        return;
+                    } else {
+                        console.log('localStorage 인증 정보가 오래됨 또는 유효하지 않음');
+                        localStorage.removeItem('authState');
+                    }
+                } catch (e) {
+                    console.error('localStorage 인증 정보 파싱 오류:', e);
+                    localStorage.removeItem('authState');
+                }
+            }
+            
+            // localStorage에 인증 정보가 없으면 Firebase 직접 확인
+            waitForFirebaseAuth();
+        }        
+        async function waitForFirebaseAuth() {
+            // Firebase가 로드되었는지 확인
+            if (typeof firebase === 'undefined' || !firebase.auth) {
+                console.error('Firebase가 아직 로드되지 않음');
+                setTimeout(waitForFirebaseAuth, 500);
+                return;
+            }
+
+            // 현재 사용자 확인 (즉시)
+            const currentUser = auth.currentUser;
+            console.log('현재 사용자 상태:', currentUser ? '로그인됨' : '확인 중');
+            
+            if (currentUser) {
+                console.log('이미 인증된 사용자 감지:', currentUser.displayName || currentUser.email);
+                await setupUserInfo(currentUser);
+                initializeMonitoring();
+                return;
+            }
+
+            // 인증 상태 변화 리스너 (한 번만 실행)
+            let authResolved = false;
+            const authTimeout = setTimeout(() => {
+                if (!authResolved) {
+                    console.log('인증 타임아웃 - 대시보드로 이동');
+                    authResolved = true;
+                    window.location.href = 'dashboard.html';
+                }
+            }, 8000); // 8초 타임아웃
+            
+            const unsubscribe = auth.onAuthStateChanged(async (user) => {
+                if (authResolved) return; // 이미 처리됨
+                
+                console.log('인증 상태 변화:', user ? '로그인됨' : '로그아웃됨');
+                
+                if (user) {
+                    console.log('인증 성공:', user.displayName || user.email);
+                    authResolved = true;
+                    clearTimeout(authTimeout);
+                    unsubscribe();
+                    
+                    // 사용자 문서 확인 및 이름 설정
+                    await setupUserInfo(user);
+                    initializeMonitoring();
+                } else {
+                    // 로그아웃 상태이지만 잠시 더 기다려보기
+                    console.log('사용자 없음 - 추가 대기 중...');                    setTimeout(() => {
+                        if (!authResolved && !auth.currentUser) {
+                            console.log('최종 확인: 인증되지 않음');
+                            authResolved = true;
+                            clearTimeout(authTimeout);
+                            unsubscribe();
+                            window.location.href = 'dashboard.html';
+                        }
+                    }, 2000);
+                }
+            });
+        }
+
+        // 사용자 문서 확인 및 이름 설정
+        async function setupUserInfo(user) {
+            try {
+                console.log('사용자 문서 확인 시작:', user.uid, user.displayName);
+                
+                // 사용자 문서 확인 및 생성 (ensureUserDocument 호출)
+                await ensureUserDocument(user.uid, user.email, user.displayName || '선생님');
+                
+                // 업데이트된 사용자 문서 다시 로드
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    const displayName = userData.displayName || user.displayName || user.email || '선생님';
+                    document.getElementById('teacherName').textContent = displayName;
+                    console.log('사용자 displayName 설정 완료:', displayName);
+                } else {
+                    console.warn('사용자 문서가 여전히 존재하지 않음');
+                    document.getElementById('teacherName').textContent = user.displayName || user.email || '선생님';
+                }
+            } catch (error) {
+                console.error('사용자 정보 설정 오류:', error);
+                // 오류가 발생해도 기본값 설정
+                document.getElementById('teacherName').textContent = user.displayName || user.email || '선생님';
+            }
+        }
+
+        // 모니터링 초기화
+        async function initializeMonitoring() {
+            try {
+                await loadTestData();
+                startRealTimeMonitoring();
+                setupAutoRefresh();
+            } catch (error) {
+                console.error('모니터링 초기화 오류:', error);
+                alert('모니터링 초기화 중 오류가 발생했습니다.');
+            }
+        }
+
+        // 테스트 데이터 로드
+        async function loadTestData() {
+            console.log('테스트 데이터 로드 시작, 코드:', currentTestCode);
+            
+            try {
+                const testDoc = await db.collection('tests').doc(currentTestCode).get();
+                
+                if (!testDoc.exists) {
+                    console.error('테스트 문서가 존재하지 않습니다:', currentTestCode);
+                    alert('테스트를 찾을 수 없습니다.');
+                    window.location.href = 'dashboard.html';
+                    return;
+                }
+
+                currentTestData = testDoc.data();
+                console.log('로드된 테스트 데이터:', currentTestData);
+                updateTestInfo();
+            } catch (error) {
+                console.error('테스트 데이터 로드 오류:', error);
+                alert('테스트 데이터를 불러오는 중 오류가 발생했습니다.');
+            }
+        }
+
+        // 테스트 정보 업데이트
+        function updateTestInfo() {
+            console.log('테스트 정보 업데이트:', currentTestData);
+            console.log('현재 테스트 코드:', currentTestCode);
+            
+            document.getElementById('testTitle').textContent = currentTestData.title || '제목 없음';
+            document.getElementById('testCode').textContent = currentTestCode;
+            document.getElementById('testDescription').textContent = currentTestData.description || '설명 없음';
+            
+            console.log('화면에 표시된 테스트 코드:', document.getElementById('testCode').textContent);
+        }        // 실시간 모니터링 시작
+        function startRealTimeMonitoring() {
+            console.log('실시간 모니터링 시작');
+            // 기존 리스너 정리
+            if (unsubscribeParticipants) {
+                unsubscribeParticipants();
+            }
+
+            // 테스트 문서의 participants 필드를 실시간 감시
+            unsubscribeParticipants = db.collection('tests').doc(currentTestCode)
+                .onSnapshot((doc) => {
+                    console.log('Firestore 스냅샷 업데이트됨');
+                    if (doc.exists) {
+                        const testData = doc.data();
+                        console.log('테스트 데이터:', testData);
+                        
+                        // 현재 테스트 데이터 업데이트
+                        currentTestData = testData;
+                        
+                        const participantsData = testData.participants || {};
+                        console.log('참여자 데이터:', participantsData);
+                        
+                        // 참여자 배열로 변환하고 상태 정규화
+                        participants = Object.keys(participantsData).map(studentId => {
+                            const participant = participantsData[studentId];
+                            
+                            // 상태 정규화
+                            let status = participant.status || 'joined';
+                            if (participant.completedAt) {
+                                status = 'completed';
+                            } else if (participant.startedAt && !participant.completedAt) {
+                                status = 'in-progress';
+                            }
+                            
+                            return {
+                                id: studentId,
+                                studentId: studentId,
+                                ...participant,
+                                status: status
+                            };
+                        });
+                        
+                        console.log('변환된 참여자 배열:', participants);
+                        
+                        // 최신순으로 정렬 (joinedAt 기준)
+                        participants.sort((a, b) => {
+                            const aTime = a.joinedAt?.toDate ? a.joinedAt.toDate().getTime() : 
+                                         a.joinedAt ? new Date(a.joinedAt).getTime() : 0;
+                            const bTime = b.joinedAt?.toDate ? b.joinedAt.toDate().getTime() : 
+                                         b.joinedAt ? new Date(b.joinedAt).getTime() : 0;
+                            return bTime - aTime;
+                        });
+                        
+                        console.log('정렬된 참여자 배열:', participants);
+                        
+                        updateStatistics();
+                        renderParticipants();
+                        updateLastUpdatedTime();
+                    } else {
+                        console.error('테스트 문서가 존재하지 않음');
+                        participants = [];
+                        updateStatistics();
+                        renderParticipants();
+                    }
+                }, (error) => {
+                    console.error('실시간 모니터링 오류:', error);
+                    alert('실시간 모니터링 중 오류가 발생했습니다: ' + error.message);
+                });
+        }
+
+        // 참여자 활성 상태 확인 (최근 1분 내 활동)
+        function isParticipantActive(participant) {
+            if (!participant.lastActiveAt) return false;
+            
+            const lastActive = participant.lastActiveAt.toDate ? participant.lastActiveAt.toDate() : new Date(participant.lastActiveAt);
+            const now = new Date();
+            const timeDiff = now - lastActive;
+            
+            // 1분(60초) 이내 활동이 있으면 활성 상태
+            return timeDiff < 60000;
+        }        // 통계 업데이트
+        function updateStatistics() {
+            console.log('통계 업데이트 시작, 참여자 수:', participants.length);
+            
+            const total = participants.length;
+            const active = participants.filter(p => p.status === 'in-progress' || p.status === 'testing').length;
+            const completed = participants.filter(p => p.status === 'completed').length;
+            const joined = participants.filter(p => p.status === 'joined').length;
+            
+            // 평균 점수 계산 - finalScore 또는 totalScore 사용
+            const completedParticipants = participants.filter(p => {
+                return p.finalScore !== undefined || p.totalScore !== undefined || 
+                       (p.status === 'completed' && p.answers && p.answers.length > 0);
+            });
+            
+            let averageScore = 0;
+            if (completedParticipants.length > 0) {
+                const totalScore = completedParticipants.reduce((sum, p) => {
+                    // finalScore, totalScore 순서로 확인
+                    const score = p.finalScore !== undefined ? p.finalScore :
+                                 p.totalScore !== undefined ? p.totalScore :
+                                 calculateParticipantScore(p);
+                    return sum + score;
+                }, 0);
+                averageScore = Math.round(totalScore / completedParticipants.length);
+            }
+
+            console.log('통계:', { total, active, completed, joined, averageScore });
+
+            // DOM 업데이트
+            document.getElementById('totalParticipants').textContent = total;
+            document.getElementById('activeParticipants').textContent = active;
+            document.getElementById('completedParticipants').textContent = completed;
+            document.getElementById('averageScore').textContent = averageScore + '%';
+        }
+
+        // 참여자 점수 계산
+        function calculateParticipantScore(participant) {
+            if (!participant.answers || !currentTestData.sentences) return 0;
+            
+            const totalQuestions = currentTestData.sentences.length;
+            const correctAnswers = participant.answers.filter(answer => {
+                return answer.isCorrect || (answer.score && answer.score >= 80);
+            }).length;
+            
+            return Math.round((correctAnswers / totalQuestions) * 100);
+        }
+
+        // 참여자 목록 렌더링
+        function renderParticipants() {
+            const container = document.getElementById('participantsList');
+            const emptyState = document.getElementById('emptyState');
+            
+            // 필터링 및 정렬
+            let filteredParticipants = filterAndSortParticipants();
+            
+            if (filteredParticipants.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            
+            container.innerHTML = filteredParticipants.map(participant => {
+                const progress = calculateProgress(participant);
+                const statusInfo = getStatusInfo(participant.status);
+                const currentQuestion = participant.currentQuestion !== undefined ? participant.currentQuestion + 1 : '-';
+                const isActive = isParticipantActive(participant);
+                
+                return `
+                    <div class="participant-card p-6 hover:bg-gray-50 cursor-pointer" onclick="showParticipantDetails('${participant.id}')">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                <div class="flex-shrink-0">
+                                    <div class="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
+                                        ${participant.name?.charAt(0)?.toUpperCase() || '?'}
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="text-lg font-semibold text-gray-900">${participant.name || '이름 없음'}</h4>
+                                    <p class="text-sm text-blue-600 font-medium">
+                                        <i class="fas fa-id-card mr-1"></i>
+                                        학번: ${participant.studentId || '미등록'}
+                                    </p>
+                                    <div class="flex items-center mt-1">
+                                        <span class="status-indicator ${statusInfo.class}"></span>
+                                        <span class="text-sm text-gray-600">${statusInfo.text}</span>
+                                        ${isActive ? '<span class="text-xs text-green-600 ml-2 animate-pulse">• 온라인</span>' : '<span class="text-xs text-gray-400 ml-2">• 오프라인</span>'}
+                                        <span class="text-xs text-gray-400 ml-2">${formatTime(participant.joinedAt)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center space-x-6">
+                                <!-- 현재 문제 -->
+                                <div class="text-center">
+                                    <div class="text-lg font-bold text-purple-600">
+                                        ${currentQuestion}
+                                    </div>
+                                    <p class="text-xs text-gray-500">문제</p>
+                                </div>
+                                
+                                <!-- 진행률 -->
+                                <div class="text-center">
+                                    <div class="relative w-16 h-16">
+                                        <svg class="progress-ring w-16 h-16">
+                                            <circle class="text-gray-200" stroke="currentColor" stroke-width="4" 
+                                                    cx="32" cy="32" r="28" fill="transparent"/>
+                                            <circle class="progress-ring-circle text-blue-500" stroke="currentColor" 
+                                                    stroke-width="4" cx="32" cy="32" r="28" fill="transparent"
+                                                    stroke-dasharray="175.93" 
+                                                    stroke-dashoffset="${175.93 - (175.93 * progress) / 100}"/>
+                                        </svg>
+                                        <div class="absolute inset-0 flex items-center justify-center">
+                                            <span class="text-sm font-semibold text-gray-700">${progress}%</span>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-1">진행률</p>
+                                </div>
+                                
+                                <!-- 점수 -->
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold ${getScoreColor(participant.finalScore)}">
+                                        ${participant.finalScore !== undefined ? participant.finalScore + '%' : '-'}
+                                    </div>
+                                    <p class="text-xs text-gray-500">점수</p>
+                                    ${participant.status === 'completed' ? 
+                                        '<div class="text-xs text-green-600 mt-1"><i class="fas fa-check-circle"></i> 완료</div>' : 
+                                        '<div class="text-xs text-gray-400 mt-1">진행 중</div>'
+                                    }
+                                </div>
+                                
+                                <!-- 시간 정보 -->
+                                <div class="text-center text-sm">
+                                    <div class="text-gray-700">
+                                        ${participant.completedAt ? '완료' : (participant.startedAt ? '진행 중' : '대기')}
+                                    </div>
+                                    <div class="text-xs text-gray-500">
+                                        ${getTimeInfo(participant)}
+                                    </div>
+                                </div>
+                                
+                                <!-- 액션 버튼 -->
+                                <div class="flex flex-col space-y-2">
+                                    <button onclick="event.stopPropagation(); showParticipantDetails('${participant.id}')" 
+                                            class="btn-secondary text-xs px-3 py-1">
+                                        <i class="fas fa-eye mr-1"></i>상세보기
+                                    </button>
+                                    ${participant.status === 'completed' ? 
+                                        `<button onclick="event.stopPropagation(); showDetailedResults('${participant.id}')" 
+                                                class="btn-primary text-xs px-3 py-1">
+                                            <i class="fas fa-chart-bar mr-1"></i>결과보기
+                                        </button>` : 
+                                        `<button class="btn-secondary text-xs px-3 py-1 opacity-50 cursor-not-allowed" disabled>
+                                            <i class="fas fa-clock mr-1"></i>진행 중
+                                        </button>`
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 필터링 및 정렬
+        function filterAndSortParticipants() {
+            let filtered = [...participants];
+            
+            // 상태 필터
+            const statusFilter = document.getElementById('statusFilter').value;
+            if (statusFilter !== 'all') {
+                filtered = filtered.filter(p => p.status === statusFilter);
+            }
+            
+            // 검색 필터
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            if (searchTerm) {
+                filtered = filtered.filter(p => 
+                    (p.name?.toLowerCase().includes(searchTerm)) ||
+                    (p.studentId?.toLowerCase().includes(searchTerm))
+                );
+            }
+            
+            // 정렬
+            const sortBy = document.getElementById('sortBy').value;
+            filtered.sort((a, b) => {
+                switch (sortBy) {
+                    case 'joinedAt':
+                        return new Date(b.joinedAt?.toDate?.() || b.joinedAt) - new Date(a.joinedAt?.toDate?.() || a.joinedAt);
+                    case 'progress':
+                        return calculateProgress(b) - calculateProgress(a);
+                    case 'score':
+                        return (b.finalScore || 0) - (a.finalScore || 0);
+                    case 'name':
+                        return (a.name || '').localeCompare(b.name || '');
+                    case 'studentId':
+                        return (a.studentId || '').localeCompare(b.studentId || '');
+                    default:
+                        return 0;
+                }
+            });
+            
+            return filtered;
+        }        // 진행률 계산
+        function calculateProgress(participant) {
+            if (!currentTestData || !currentTestData.sentences) {
+                console.warn('테스트 데이터가 없음, 진행률 계산 불가');
+                return 0;
+            }
+            
+            const totalQuestions = currentTestData.sentences.length;
+            
+            // 여러 방식으로 진행률 계산 시도
+            let answeredQuestions = 0;
+            
+            if (participant.answers && Array.isArray(participant.answers)) {
+                answeredQuestions = participant.answers.length;
+            } else if (participant.currentQuestion !== undefined) {
+                answeredQuestions = participant.currentQuestion + 1;
+            } else if (participant.status === 'completed') {
+                answeredQuestions = totalQuestions;
+            }
+            
+            const progress = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+            return Math.min(progress, 100); // 100% 초과 방지
+        }
+
+        // 참여자 활성 상태 확인 (최근 1분 내 활동)
+        function isParticipantActive(participant) {
+            if (!participant.lastActiveAt) return false;
+            
+            const lastActive = participant.lastActiveAt.toDate ? participant.lastActiveAt.toDate() : new Date(participant.lastActiveAt);
+            const now = new Date();
+            const timeDiff = now - lastActive;
+            
+            // 1분(60초) 이내 활동이 있으면 활성 상태
+            return timeDiff < 60000;
+        }
+
+        // 상태 정보 가져오기
+        function getStatusInfo(status) {
+            const statusMap = {
+                'joined': { text: '참여함', class: 'status-online' },
+                'in-progress': { text: '테스트 중', class: 'status-testing' },
+                'completed': { text: '완료', class: 'status-completed' },
+                'away': { text: '자리비움', class: 'status-away' }
+            };
+            return statusMap[status] || { text: '알 수 없음', class: 'status-offline' };
+        }
+
+        // 점수 색상 가져오기
+        function getScoreColor(score) {
+            if (score === undefined) return 'text-gray-400';
+            if (score >= 90) return 'text-green-600';
+            if (score >= 80) return 'text-blue-600';
+            if (score >= 70) return 'text-yellow-600';
+            return 'text-red-600';
+        }        // 시간 정보 가져오기
+        function getTimeInfo(participant) {
+            const now = Date.now();
+            
+            if (participant.completedAt) {
+                const startTime = participant.actualStartTime?.toDate() || participant.startedAt?.toDate();
+                const endTime = participant.completedAt.toDate();
+                if (startTime) {
+                    const duration = endTime - startTime;
+                    return `${Math.round(duration / 60000)}분 소요`;
+                }
+                return '완료됨';
+            } else if (participant.actualStartTime || participant.startedAt) {
+                const startTime = participant.actualStartTime?.toDate() || participant.startedAt?.toDate();
+                const elapsed = now - startTime;
+                const elapsedMinutes = Math.round(elapsed / 60000);
+                
+                // 시간 제한이 있는 경우 남은 시간도 표시
+                if (currentTestData?.settings?.timeLimit) {
+                    const totalMinutes = Math.ceil(currentTestData.settings.timeLimit / 60);
+                    const remainingMinutes = Math.max(0, totalMinutes - elapsedMinutes);
+                    
+                    if (remainingMinutes > 0) {
+                        return `${elapsedMinutes}분 경과 (${remainingMinutes}분 남음)`;
+                    } else {
+                        return `${elapsedMinutes}분 경과 (시간 초과)`;
+                    }
+                } else {
+                    return `${elapsedMinutes}분 경과`;
+                }
+            }
+            return '시작 전';
+        }
+
+        // 시간 포맷팅
+        function formatTime(timestamp) {
+            if (!timestamp) return '';
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleTimeString('ko-KR', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+
+        // 참여자 상세 정보 표시
+        function showParticipantDetails(participantId) {
+            console.log('showParticipantDetails 호출됨:', participantId);
+            console.log('참여자 목록:', participants);
+            
+            const participant = participants.find(p => p.id === participantId);
+            if (!participant) {
+                console.error('참여자를 찾을 수 없음:', participantId);
+                alert('참여자 정보를 찾을 수 없습니다: ' + participantId);
+                return;
+            }
+
+            console.log('참여자 데이터:', participant);
+
+            const modal = document.getElementById('participantModal');
+            const title = document.getElementById('participantModalTitle');
+            const details = document.getElementById('participantDetails');
+
+            if (!modal || !title || !details) {
+                console.error('모달 요소를 찾을 수 없음');
+                alert('모달 요소를 찾을 수 없습니다');
+                return;
+            }
+
+            title.textContent = `${participant.name || '이름 없음'} - 상세 정보`;
+
+            const progress = calculateProgress(participant);
+            const isActive = isParticipantActive(participant);
+            const statusInfo = getStatusInfo(participant.status);
+
+            details.innerHTML = `
+                <div class="space-y-6">
+                    <!-- 기본 정보 -->
+                    <div class="bg-gray-50 rounded-lg p-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">기본 정보</h4>                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">이름</label>
+                                <div class="mt-1 text-lg font-semibold">${participant.name || '이름 없음'}</div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">학번</label>
+                                <div class="mt-1 text-lg font-semibold">${participant.studentId || '학번 없음'}</div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">참여 시간</label>
+                                <div class="mt-1">${formatTime(participant.joinedAt)}</div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">현재 상태</label>
+                                <div class="mt-1 flex items-center space-x-2">
+                                    <span class="status-indicator ${statusInfo.class}"></span>
+                                    <span>${statusInfo.text}</span>
+                                    ${isActive ? '<span class="text-green-600 text-sm">• 온라인</span>' : '<span class="text-gray-400 text-sm">• 오프라인</span>'}
+                                </div>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="text-sm font-medium text-gray-700">브라우저 독립 접속 링크</label>
+                                <div class="mt-2 flex items-center space-x-2">
+                                    <button onclick="generateDirectLink('${participant.id}', '${participant.name}', '${participant.studentId}')" 
+                                            class="btn-primary text-xs px-3 py-1">
+                                        <i class="fas fa-link mr-1"></i>링크 생성
+                                    </button>
+                                    <button onclick="copyDirectLink('${participant.id}', '${participant.name}', '${participant.studentId}')" 
+                                            class="btn-secondary text-xs px-3 py-1">
+                                        <i class="fas fa-copy mr-1"></i>링크 복사
+                                    </button>
+                                    <span id="linkCopySuccess-${participant.id}" class="hidden text-green-600 text-xs">
+                                        <i class="fas fa-check mr-1"></i>복사됨!
+                                    </span>
+                                </div>
+                                <div class="mt-1 text-xs text-blue-600">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    이 링크로 다른 브라우저에서도 동일한 세션으로 접속 가능
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 진행 상황 -->
+                    <div class="bg-blue-50 rounded-lg p-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">진행 상황</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-blue-600">${progress}%</div>
+                                <div class="text-sm text-gray-600">진행률</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-purple-600">
+                                    ${participant.currentQuestion !== undefined ? participant.currentQuestion + 1 : 0}
+                                </div>
+                                <div class="text-sm text-gray-600">현재 문제</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold ${getScoreColor(participant.finalScore)}">
+                                    ${participant.finalScore !== undefined ? participant.finalScore + '%' : '-'}
+                                </div>
+                                <div class="text-sm text-gray-600">점수</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 시간 정보 -->
+                    <div class="bg-green-50 rounded-lg p-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">시간 정보</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">시작 시간</label>
+                                <div class="mt-1">${participant.startedAt ? formatTime(participant.startedAt) : '아직 시작하지 않음'}</div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">완료 시간</label>
+                                <div class="mt-1">${participant.completedAt ? formatTime(participant.completedAt) : '아직 완료하지 않음'}</div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">소요 시간</label>
+                                <div class="mt-1">
+                                    ${participant.duration ? `${participant.duration}분` : 
+                                      (participant.startedAt && participant.completedAt ? 
+                                        `${Math.round((participant.completedAt.toDate() - participant.startedAt.toDate()) / 60000)}분` : 
+                                        '진행 중')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 최종 결과 (완료된 경우만 표시) -->
+                    ${participant.status === 'completed' ? `
+                        <div class="bg-yellow-50 rounded-lg p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-semibold text-gray-900">최종 제출 결과</h4>
+                                <div class="space-x-2">
+                                    <button onclick="toggleDetailedAnswers('${participantId}')" 
+                                            class="btn-secondary text-sm">
+                                        <i class="fas fa-list mr-2"></i>문제별 결과
+                                    </button>
+                                    <button onclick="showDetailedResults('${participantId}')" 
+                                            class="btn-primary text-sm">
+                                        <i class="fas fa-external-link-alt mr-2"></i>새 창으로 보기
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                <div class="text-center">
+                                    <div class="text-xl font-bold text-green-600">
+                                        ${participant.correctAnswers || 0}
+                                    </div>
+                                    <div class="text-sm text-gray-600">정답</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-xl font-bold text-red-600">
+                                        ${(currentTestData.sentences?.length || 0) - (participant.correctAnswers || 0)}
+                                    </div>
+                                    <div class="text-sm text-gray-600">오답</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-xl font-bold text-blue-600">
+                                        ${currentTestData.sentences?.length || 0}
+                                    </div>
+                                    <div class="text-sm text-gray-600">전체</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-xl font-bold ${getScoreColor(participant.finalScore)}">
+                                        ${participant.finalScore || 0}%
+                                    </div>
+                                    <div class="text-sm text-gray-600">최종 점수</div>
+                                </div>
+                            </div>
+                            
+                            <!-- 문제별 상세 결과 (토글) -->
+                            <div id="detailedAnswers-${participantId}" class="detailed-answers-section" style="display: none;">
+                                <div class="border-t pt-4">
+                                    <h5 class="font-semibold text-gray-800 mb-3">문제별 답안 및 채점 결과</h5>
+                                    <div class="max-h-60 overflow-y-auto space-y-3">
+                                        ${generateDetailedAnswersHTML(participant)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <!-- 답안 미리보기 (진행 중인 경우) -->
+                    ${participant.answers && participant.answers.length > 0 ? `
+                        <div class="bg-purple-50 rounded-lg p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-semibold text-gray-900">
+                                    답안 현황 (${participant.answers.length}/${currentTestData.sentences?.length || 0})
+                                </h4>
+                                <button onclick="toggleInProgressAnswers('${participantId}')" 
+                                        class="btn-secondary text-sm">
+                                    <i class="fas fa-eye mr-2"></i>모든 답안 보기
+                                </button>
+                            </div>
+                            
+                            <!-- 최근 답안 미리보기 -->
+                            <div class="recent-answers mb-4">
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">최근 답안 (최대 3개)</h5>
+                                <div class="space-y-2">
+                                    ${participant.answers.slice(-3).map((answer, index) => {
+                                        const questionIndex = answer.questionIndex !== undefined ? answer.questionIndex : (participant.answers.length - 3 + index);
+                                        const sentence = currentTestData.sentences?.[questionIndex];
+                                        const isCorrect = answer.isCorrect !== undefined ? answer.isCorrect : (answer.score >= 80);
+                                        const score = answer.score || 0;
+                                        
+                                        return `
+                                            <div class="text-sm p-3 rounded border ${isCorrect ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'}">
+                                                <div class="flex items-center justify-between mb-1">
+                                                    <span class="font-medium">문제 ${questionIndex + 1}</span>
+                                                    <span class="px-2 py-1 rounded text-xs font-medium ${isCorrect ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}">
+                                                        ${score}점
+                                                    </span>
+                                                </div>
+                                                <div class="text-xs text-gray-600">
+                                                    답안: ${answer.userAnswer || answer.answer || answer.text || '(빈 답안)'}
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                                ${participant.answers.length > 3 ? 
+                                    `<div class="text-center text-sm text-gray-500 mt-2">... 외 ${participant.answers.length - 3}개</div>` : 
+                                    ''
+                                }
+                            </div>
+                            
+                            <!-- 전체 답안 목록 (토글) -->
+                            <div id="allAnswers-${participantId}" class="all-answers-section" style="display: none;">
+                                <div class="border-t pt-4">
+                                    <h5 class="text-sm font-medium text-gray-700 mb-3">전체 답안 목록</h5>
+                                    <div class="max-h-60 overflow-y-auto space-y-2">
+                                        ${generateInProgressAnswersHTML(participant)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            console.log('모달 HTML 생성 완료');
+            modal.style.display = 'flex';
+            console.log('모달 표시됨');
+        }
+
+        // 상세 결과 보기
+        function showDetailedResults(participantId) {
+            const participant = participants.find(p => p.id === participantId);
+            if (!participant || !participant.answers) return;
+
+            // 새 창에서 결과 페이지 열기
+            const resultUrl = `../student/result.html?test=${currentTestCode}&student=${participantId}&view=teacher`;
+            window.open(resultUrl, '_blank', 'width=1200,height=800');
+        }
+
+        // 문제별 상세 답안 HTML 생성
+        function generateDetailedAnswersHTML(participant) {
+            if (!participant.answers || !currentTestData.sentences) {
+                return '<div class="text-gray-500 text-center py-4">답안 데이터가 없습니다.</div>';
+            }
+
+            return participant.answers.map((answer, index) => {
+                const sentence = currentTestData.sentences[index];
+                const isCorrect = answer.isCorrect !== undefined ? answer.isCorrect : (answer.score >= 80);
+                const score = answer.score || 0;
+                const studentAnswer = answer.userAnswer || answer.answer || answer.text || '';
+                const correctAnswer = sentence ? sentence.text : '';
+                const timeSpent = answer.timeSpent ? `${Math.round(answer.timeSpent / 1000)}초` : '-';
+
+                return `
+                    <div class="answer-item border rounded-lg p-4 ${isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-3">
+                                <span class="font-semibold text-gray-700">문제 ${index + 1}</span>
+                                <span class="px-2 py-1 rounded text-sm font-medium ${
+                                    isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                }">
+                                    ${score}점
+                                </span>
+                                <span class="text-sm text-gray-500">${timeSpent}</span>
+                            </div>
+                            <div class="${isCorrect ? 'text-green-600' : 'text-red-600'}">
+                                <i class="fas ${isCorrect ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-2 text-sm">
+                            <div>
+                                <span class="font-medium text-gray-600">정답:</span>
+                                <span class="ml-2 text-gray-800">${correctAnswer}</span>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-600">학생 답안:</span>
+                                <span class="ml-2 ${isCorrect ? 'text-green-700' : 'text-red-700'}">${studentAnswer}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 진행 중 답안 HTML 생성 (간단 버전)
+        function generateInProgressAnswersHTML(participant) {
+            if (!participant.answers || !currentTestData.sentences) {
+                return '<div class="text-gray-500 text-center py-4">답안 데이터가 없습니다.</div>';
+            }
+
+            return participant.answers.map((answer, index) => {
+                const questionIndex = answer.questionIndex !== undefined ? answer.questionIndex : index;
+                const sentence = currentTestData.sentences[questionIndex];
+                const isCorrect = answer.isCorrect !== undefined ? answer.isCorrect : (answer.score >= 80);
+                const score = answer.score || 0;
+                const studentAnswer = answer.userAnswer || answer.answer || answer.text || '';
+                const timeSpent = answer.timeSpent ? `${Math.round(answer.timeSpent / 1000)}초` : '-';
+
+                return `
+                    <div class="border rounded p-3 ${isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-medium text-sm">문제 ${questionIndex + 1}</span>
+                            <div class="flex items-center space-x-2">
+                                <span class="px-2 py-1 rounded text-xs font-medium ${
+                                    isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                }">
+                                    ${score}점
+                                </span>
+                                <span class="text-xs text-gray-500">${timeSpent}</span>
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-700">
+                            답안: <span class="${isCorrect ? 'text-green-700' : 'text-red-700'}">${studentAnswer || '(빈 답안)'}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 상세 답안 토글
+        function toggleDetailedAnswers(participantId) {
+            const detailsElement = document.getElementById(`detailedAnswers-${participantId}`);
+            if (detailsElement) {
+                const isVisible = detailsElement.style.display !== 'none';
+                detailsElement.style.display = isVisible ? 'none' : 'block';
+                
+                // 버튼 텍스트 변경
+                const button = event.target.closest('button');
+                if (button) {
+                    if (isVisible) {
+                        button.innerHTML = '<i class="fas fa-list mr-2"></i>문제별 결과';
+                    } else {
+                        button.innerHTML = '<i class="fas fa-list-ul mr-2"></i>결과 접기';
+                    }
+                }
+            }
+        }
+
+        // 진행 중 답안 토글
+        function toggleInProgressAnswers(participantId) {
+            const answersElement = document.getElementById(`allAnswers-${participantId}`);
+            if (answersElement) {
+                const isVisible = answersElement.style.display !== 'none';
+                answersElement.style.display = isVisible ? 'none' : 'block';
+                
+                // 버튼 텍스트 변경
+                const button = event.target.closest('button');
+                if (button) {
+                    if (isVisible) {
+                        button.innerHTML = '<i class="fas fa-eye mr-2"></i>모든 답안 보기';
+                    } else {
+                        button.innerHTML = '<i class="fas fa-eye-slash mr-2"></i>답안 접기';
+                    }
+                }
+            }
+        }
+
+        // 최종 제출 결과 표시 (간단 버전)
+        function showTestResults(participantId) {
+            const participant = participants.find(p => p.id === participantId);
+            if (!participant || participant.status !== 'completed') {
+                alert('아직 테스트가 완료되지 않았습니다.');
+                return;
+            }
+
+            showParticipantDetails(participantId);
+        }
+
+        // 자동 새로고침 설정
+        function setupAutoRefresh() {
+            const intervalSelect = document.getElementById('refreshInterval');
+            
+            function updateRefreshInterval() {
+                const interval = parseInt(intervalSelect.value);
+                
+                // 기존 인터벌 정리
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+                
+                if (interval > 0) {
+                    refreshInterval = setInterval(() => {
+                        console.log('자동 새로고침');
+                        updateLastUpdatedTime();
+                    }, interval * 1000);
+                    
+                    document.getElementById('autoRefreshIndicator').style.display = 'inline-flex';
+                } else {
+                    document.getElementById('autoRefreshIndicator').style.display = 'none';
+                }
+            }
+            
+            intervalSelect.addEventListener('change', updateRefreshInterval);
+            updateRefreshInterval(); // 초기 설정
+        }
+
+        // 마지막 업데이트 시간 갱신
+        function updateLastUpdatedTime() {
+            const now = new Date();
+            const timeElement = document.getElementById('lastUpdatedTime');
+            if (timeElement) {
+                timeElement.textContent = now.toLocaleTimeString('ko-KR');
+            }
+        }
+
+        // 이벤트 리스너 초기화
+        function initializeEventListeners() {
+            // 테스트 코드 복사 버튼
+            const copyTestCodeBtn = document.getElementById('copyTestCodeBtn');
+            if (copyTestCodeBtn) {
+                copyTestCodeBtn.addEventListener('click', function() {
+                    navigator.clipboard.writeText(currentTestCode).then(() => {
+                        const successMsg = document.getElementById('copyTestCodeSuccess');
+                        if (successMsg) {
+                            successMsg.classList.remove('hidden');
+                            setTimeout(() => {
+                                successMsg.classList.add('hidden');
+                            }, 2000);
+                        }
+                    }).catch(err => {
+                        console.error('클립보드 복사 실패:', err);
+                        alert('테스트 코드: ' + currentTestCode);
+                    });
+                });
+            }
+
+            // 새로고침 버튼
+            const refreshNowBtn = document.getElementById('refreshNowBtn');
+            if (refreshNowBtn) {
+                refreshNowBtn.addEventListener('click', function() {
+                    console.log('수동 새로고침');
+                    updateLastUpdatedTime();
+                });
+            }
+
+            // 데이터 내보내기 버튼
+            const exportDataBtn = document.getElementById('exportDataBtn');
+            if (exportDataBtn) {
+                exportDataBtn.addEventListener('click', function() {
+                    exportParticipantsData();
+                });
+            }
+
+            // 필터 및 정렬 이벤트
+            const statusFilter = document.getElementById('statusFilter');
+            if (statusFilter) {
+                statusFilter.addEventListener('change', renderParticipants);
+            }
+
+            const sortBy = document.getElementById('sortBy');
+            if (sortBy) {
+                sortBy.addEventListener('change', renderParticipants);
+            }
+
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', renderParticipants);
+            }
+
+            const clearSearchBtn = document.getElementById('clearSearchBtn');
+            if (clearSearchBtn) {
+                clearSearchBtn.addEventListener('click', function() {
+                    searchInput.value = '';
+                    renderParticipants();
+                });
+            }
+
+            // 로그아웃 버튼
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', function() {
+                    if (confirm('로그아웃하시겠습니까?')) {
+                        localStorage.removeItem('authState');
+                        auth.signOut();
+                        window.location.href = '../index.html';
+                    }
+                });
+            }
+
+            // 모달 닫기 버튼
+            const closeModal = document.getElementById('closeParticipantModal');
+            if (closeModal) {
+                closeModal.addEventListener('click', function() {
+                    document.getElementById('participantModal').style.display = 'none';
+                });
+            }
+
+            // 모달 배경 클릭 시 닫기
+            const modal = document.getElementById('participantModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+            }
+
+            // ESC 키로 모달 닫기
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const modal = document.getElementById('participantModal');
+                    if (modal && modal.style.display === 'flex') {
+                        modal.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        // 데이터 내보내기 함수
+        function exportParticipantsData() {
+            if (participants.length === 0) {
+                alert('내보낼 참여자 데이터가 없습니다.');
+                return;
+            }
+
+            const csvData = generateCSVData();
+            downloadCSV(csvData, `${currentTestData.title || 'test'}_results_${new Date().toISOString().split('T')[0]}.csv`);
+        }
+
+        // CSV 데이터 생성
+        function generateCSVData() {
+            const headers = ['이름', '학번', '상태', '진행률', '점수', '참여시간', '시작시간', '완료시간'];
+            const rows = participants.map(participant => [
+                participant.name || '',
+                participant.studentId || '',
+                getStatusInfo(participant.status).text,
+                calculateProgress(participant) + '%',
+                (participant.finalScore !== undefined ? participant.finalScore : calculateParticipantScore(participant)) + '%',
+                formatTime(participant.joinedAt),
+                participant.startedAt ? formatTime(participant.startedAt) : '',
+                participant.completedAt ? formatTime(participant.completedAt) : ''
+            ]);
+
+            return [headers, ...rows].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+        }
+
+        // CSV 파일 다운로드
+        function downloadCSV(csvData, filename) {
+            const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }        // 디버깅용 함수 (브라우저 콘솔에서 호출 가능)
+        window.debugParticipants = function() {
+            console.log('현재 참여자 목록:', participants);
+            console.log('현재 테스트 데이터:', currentTestData);
+            console.log('모달 요소:', document.getElementById('participantModal'));
+        };
+
+        window.testModal = function(participantId) {
+            console.log('테스트 모달 호출:', participantId || 'first-participant');
+            if (participants.length > 0) {
+                const id = participantId || participants[0].id;
+                showParticipantDetails(id);
+            } else {
+                console.log('참여자가 없습니다');
+            }
+        };
+
+        // 간단한 모달 테스트
+        window.simpleModalTest = function() {
+            const modal = document.getElementById('participantModal');
+            const title = document.getElementById('participantModalTitle');
+            const details = document.getElementById('participantDetails');
+            
+            if (!modal || !title || !details) {
+                console.error('모달 요소를 찾을 수 없음');
+                return;
+            }
+            
+            title.textContent = '테스트 모달';
+            details.innerHTML = '<p>모달이 정상 작동합니다!</p>';
+            modal.style.display = 'flex';
+            console.log('모달 테스트 표시됨');
+        };
+
+        // 브라우저 독립 직접 링크 생성
+        function generateDirectLink(participantId, participantName, studentId) {
+            const baseUrl = window.location.origin + window.location.pathname.replace('/teacher/monitor.html', '');
+            const directUrl = `${baseUrl}/student/dictation.html?testCode=${currentTestCode}&participantId=${participantId}&participantName=${encodeURIComponent(participantName)}`;
+            
+            // 링크를 모달에 표시
+            showDirectLinkModal(directUrl, participantName, studentId);
+        }
+
+        // 직접 링크 복사
+        function copyDirectLink(participantId, participantName, studentId) {
+            const baseUrl = window.location.origin + window.location.pathname.replace('/teacher/monitor.html', '');
+            const directUrl = `${baseUrl}/student/dictation.html?testCode=${currentTestCode}&participantId=${participantId}&participantName=${encodeURIComponent(participantName)}`;
+            
+            navigator.clipboard.writeText(directUrl).then(() => {
+                const successElement = document.getElementById(`linkCopySuccess-${participantId}`);
+                if (successElement) {
+                    successElement.classList.remove('hidden');
+                    setTimeout(() => {
+                        successElement.classList.add('hidden');
+                    }, 3000);
+                }
+                
+                // 전역 알림도 표시
+                showNotification('링크가 클립보드에 복사되었습니다!', 'success');
+            }).catch(err => {
+                console.error('클립보드 복사 실패:', err);
+                alert('링크 복사 실패. 수동으로 복사하세요:\\n' + directUrl);
+            });
+        }
+
+        // 직접 링크 모달 표시
+        function showDirectLinkModal(directUrl, participantName, studentId) {
+            const modalHtml = `
+                <div id="directLinkModal" class="modal" style="display: flex;">
+                    <div class="modal-content max-w-2xl">
+                        <div class="modal-header">
+                            <h3>브라우저 독립 접속 링크</h3>
+                            <button onclick="closeDirectLinkModal()" class="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="space-y-4">
+                                <div class="bg-blue-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-blue-900 mb-2">
+                                        <i class="fas fa-user mr-2"></i>${participantName} (${studentId})
+                                    </h4>
+                                    <p class="text-blue-700 text-sm">
+                                        이 링크를 사용하면 어떤 브라우저에서든 동일한 테스트 세션으로 접속할 수 있습니다.
+                                    </p>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">접속 링크</label>
+                                    <div class="flex items-center space-x-2">
+                                        <input type="text" value="${directUrl}" 
+                                               class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm font-mono bg-gray-50" 
+                                               readonly onclick="this.select()">
+                                        <button onclick="copyLinkFromInput('${directUrl}')" 
+                                                class="btn-primary text-sm px-4 py-2">
+                                            <i class="fas fa-copy mr-2"></i>복사
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-yellow-50 p-4 rounded-lg">
+                                    <div class="flex items-start space-x-2">
+                                        <i class="fas fa-lightbulb text-yellow-600 mt-0.5"></i>
+                                        <div class="text-yellow-800 text-sm">
+                                            <p class="font-medium mb-1">사용 방법:</p>
+                                            <ul class="list-disc list-inside space-y-1">
+                                                <li>학생이 다른 브라우저나 기기에서 이 링크로 접속</li>
+                                                <li>기존 진행 상황과 시간 정보가 자동으로 복원됨</li>
+                                                <li>링크는 48시간 동안 유효함</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button onclick="closeDirectLinkModal()" class="btn-secondary">닫기</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 기존 직접 링크 모달이 있으면 제거
+            const existingModal = document.getElementById('directLinkModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 새 모달 추가
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        // 직접 링크 모달 닫기
+        function closeDirectLinkModal() {
+            const modal = document.getElementById('directLinkModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // 입력 필드에서 링크 복사
+        function copyLinkFromInput(url) {
+            navigator.clipboard.writeText(url).then(() => {
+                showNotification('링크가 클립보드에 복사되었습니다!', 'success');
+            }).catch(err => {
+                console.error('클립보드 복사 실패:', err);
+                alert('링크: ' + url);
+            });
+        }
+
+        // 알림 표시
+        function showNotification(message, type = 'info') {
+            const notificationHtml = `
+                <div id="notification" class="fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg max-w-sm ${
+                    type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' :
+                    type === 'error' ? 'bg-red-100 text-red-800 border border-red-200' :
+                    'bg-blue-100 text-blue-800 border border-blue-200'
+                }">
+                    <div class="flex items-center space-x-2">
+                        <i class="fas ${
+                            type === 'success' ? 'fa-check-circle' :
+                            type === 'error' ? 'fa-exclamation-circle' :
+                            'fa-info-circle'
+                        }"></i>
+                        <span class="text-sm font-medium">${message}</span>
+                    </div>
+                </div>
+            `;
+            
+            // 기존 알림 제거
+            const existingNotification = document.getElementById('notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+            
+            // 새 알림 추가
+            document.body.insertAdjacentHTML('beforeend', notificationHtml);
+            
+            // 3초 후 자동 제거
+            setTimeout(() => {
+                const notification = document.getElementById('notification');
+                if (notification) {
+                    notification.remove();
+                }
+            }, 3000);
+        }
+    </script>
+    
+    <!-- JavaScript 파일들 - 충돌 방지를 위해 주석처리 -->
+    <!-- 
+    <script src="../js/firebase-config.js?v=4"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/teacher.js"></script>
+    <script src="../js/export.js"></script>
+    -->
+    
+    <script>
+        // 자동 새로고침 설정
+        function setupAutoRefresh() {
+            const intervalSelect = document.getElementById('refreshInterval');
+            
+            function updateRefreshInterval() {
+                const interval = parseInt(intervalSelect.value);
+                
+                // 기존 인터벌 정리
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+                
+                if (interval > 0) {
+                    refreshInterval = setInterval(() => {
+                        console.log('자동 새로고침');
+                        updateLastUpdatedTime();
+                    }, interval * 1000);
+                    
+                    document.getElementById('autoRefreshIndicator').style.display = 'inline-flex';
+                } else {
+                    document.getElementById('autoRefreshIndicator').style.display = 'none';
+                }
+            }
+            
+            intervalSelect.addEventListener('change', updateRefreshInterval);
+            updateRefreshInterval(); // 초기 설정
+        }
+
+        // 마지막 업데이트 시간 갱신
+        function updateLastUpdatedTime() {
+            const now = new Date();
+            const timeElement = document.getElementById('lastUpdatedTime');
+            if (timeElement) {
+                timeElement.textContent = now.toLocaleTimeString('ko-KR');
+            }
+        }
+    </script>
+</body>
+</html>

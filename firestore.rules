@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 교사 사용자 정보는 본인만 읽기/쓰기 가능
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 테스트는 교사만 생성/수정, 모든 사용자 읽기 가능 (테스트 코드로 접근)
+    match /tests/{testCode} {
+      allow read: if true; // 테스트 코드 알면 누구나 접근 가능
+      allow create: if request.auth != null; // 교사만 테스트 생성 가능
+      allow update: if request.auth != null || 
+        // 학생이 participants 필드만 업데이트하는 경우 허용
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'lastUpdated']));
+      allow delete: if request.auth != null; // 교사만 삭제 가능
+    }
+    
+    // 테스트 결과는 해당 테스트 참여자만 생성 가능, 교사는 모든 결과 조회 가능
+    match /tests/{testCode}/results/{resultId} {
+      allow read: if request.auth != null || 
+        resource.data.studentId == request.resource.data.studentId;
+      allow create: if true; // 학생은 무인증으로도 결과 생성 가능
+      allow update, delete: if request.auth != null; // 교사만 수정/삭제 가능
+    }
+    
+    // 통계 데이터는 교사만 접근 가능
+    match /statistics/{statId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 모든 기타 문서에 대한 기본 규칙
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

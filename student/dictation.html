@@ -1,0 +1,1873 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>받아쓰기 테스트 - 영어 받아쓰기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <style>
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .question-card {
+            transition: all 0.3s ease;
+            min-height: 400px;
+        }
+        .audio-controls {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        .timer {
+            animation: pulse 1s ease-in-out infinite;
+        }
+        .answer-input {
+            font-size: 18px;
+            line-height: 1.5;
+            min-height: 120px;
+        }
+        .play-button {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            transition: all 0.3s ease;
+        }
+        .play-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(34, 197, 94, 0.3);
+        }
+        .play-button:active {
+            transform: scale(0.95);
+        }
+        .sentence-display {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .navigation-buttons {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            backdrop-filter: blur(10px);
+        }
+        .feedback-correct {
+            background-color: #dcfce7;
+            border-color: #16a34a;
+            color: #15803d;
+        }
+        .feedback-incorrect {
+            background-color: #fef2f2;
+            border-color: #dc2626;
+            color: #dc2626;
+        }
+        .loading-dots {
+            animation: loading 1.4s infinite ease-in-out both;
+        }
+        .loading-dots:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dots:nth-child(2) { animation-delay: -0.16s; }        @keyframes loading {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+        }
+        .modal-header {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .modal-body {
+            padding: 1rem 0;
+        }
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+        .btn-primary:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        .btn-secondary {
+            background-color: #6b7280;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563;
+        }
+        .btn-secondary:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <!-- 헤더 -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 id="testTitle" class="text-xl font-semibold text-gray-900">받아쓰기 테스트</h1>
+                    <span id="studentInfo" class="ml-4 text-sm text-gray-600"></span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <!-- 진행률 -->
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm text-gray-600">진행률:</span>
+                        <div class="w-24 bg-gray-200 rounded-full h-2">
+                            <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <span id="progressText" class="text-sm font-medium text-gray-700">0/0</span>
+                    </div>
+                    <!-- 타이머 -->
+                    <div class="timer bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">
+                        <i class="fas fa-clock mr-1"></i>
+                        <span id="timeRemaining">00:00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 시간 진행 상황 프로그래스 바 -->
+    <div id="timeProgressContainer" class="hidden bg-white border-b">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="py-3">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">시간 진행 상황</span>
+                    <span id="timeProgressText" class="text-sm text-gray-600">남은 시간: <span id="timeRemainingText">--:--</span></span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="timeProgressBar" class="bg-gradient-to-r from-green-500 to-yellow-500 h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+                </div>
+                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>시작</span>
+                    <span id="halfTimeMarker" class="hidden">중간</span>
+                    <span>종료</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="test-container py-8 px-4 sm:px-6 lg:px-8">
+        <!-- 테스트 시작 전 안내 -->
+        <div id="startScreen" class="bg-white rounded-xl shadow-lg p-8 text-center">
+            <div class="mb-6">
+                <i class="fas fa-headphones text-6xl text-blue-500 mb-4"></i>
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">받아쓰기 테스트</h2>
+                <p class="text-gray-600">준비가 되면 시작 버튼을 눌러주세요.</p>
+            </div>
+            
+            <div class="bg-gray-50 rounded-lg p-6 mb-6">
+                <h3 class="font-semibold text-gray-900 mb-3">테스트 안내</h3>                <ul class="text-left text-sm text-gray-600 space-y-2">
+                    <li><i class="fas fa-check text-green-500 mr-2"></i>각 문장은 최대 3번까지 들을 수 있습니다</li>
+                    <li><i class="fas fa-check text-green-500 mr-2"></i>문장을 듣고 정확히 입력해주세요</li>
+                    <li><i class="fas fa-check text-green-500 mr-2"></i>대소문자와 구두점에 주의해주세요</li>
+                    <li><i class="fas fa-check text-green-500 mr-2"></i>입력 후 다음 버튼을 눌러 진행하세요</li>
+                </ul>
+                
+                <!-- 시간 제한 정보 (별도 강조) -->
+                <div id="timeLimitInfo" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex items-center">
+                        <i class="fas fa-clock text-blue-500 mr-2"></i>
+                        <span class="font-medium text-blue-800">제한 시간: <span id="timeLimitDisplay">확인 중...</span></span>
+                    </div>
+                </div>
+            </div>            <div class="space-y-4">
+                <button id="startTestBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors">
+                    <i class="fas fa-play mr-2"></i>테스트 시작
+                </button>
+                <div>
+                    <button id="testAudioBtn" class="text-blue-600 hover:text-blue-800 text-sm">
+                        <i class="fas fa-volume-up mr-1"></i>오디오 테스트
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 테스트 진행 화면 -->
+        <div id="testScreen" class="hidden">
+            <!-- 질문 카드 -->
+            <div class="question-card bg-white rounded-xl shadow-lg p-8 mb-6">
+                <!-- 문제 번호 및 정보 -->
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">
+                            문제 <span id="currentQuestionNumber">1</span> / <span id="totalQuestions">0</span>
+                        </h3>
+                        <p class="text-sm text-gray-600 mt-1">
+                            난이도: <span id="currentDifficulty" class="difficulty-badge">보통</span>
+                        </p>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        재생 횟수: <span id="playCount">0</span> / 3
+                    </div>
+                </div>
+
+                <!-- 오디오 컨트롤 -->
+                <div class="audio-controls rounded-xl p-8 text-white text-center mb-6">
+                    <div class="mb-4">
+                        <p class="text-white/80 mb-2">문장을 듣고 아래에 입력하세요</p>
+                        <div id="sentenceDisplay" class="sentence-display rounded-lg p-4 text-center hidden">
+                            <p id="currentSentence" class="text-lg"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-center items-center space-x-4">
+                        <button id="playButton" class="play-button flex items-center justify-center text-white hover:text-white">
+                            <i class="fas fa-play text-2xl"></i>
+                        </button>
+                        <div class="text-center">
+                            <div id="audioStatus" class="text-sm text-white/80 mb-1">재생을 위해 버튼을 클릭하세요</div>
+                            <div id="audioProgress" class="w-32 bg-white/20 rounded-full h-2 hidden">
+                                <div id="audioProgressBar" class="bg-white h-2 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 추가 컨트롤 -->
+                    <div class="flex justify-center space-x-4 mt-4">
+                        <button id="speedSlowBtn" class="text-white/70 hover:text-white text-sm">
+                            <i class="fas fa-backward mr-1"></i>느리게
+                        </button>
+                        <button id="speedNormalBtn" class="text-white text-sm border-b border-white/50">
+                            <i class="fas fa-play mr-1"></i>보통
+                        </button>
+                        <button id="speedFastBtn" class="text-white/70 hover:text-white text-sm">
+                            <i class="fas fa-forward mr-1"></i>빠르게
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 답안 입력 -->
+                <div class="mb-6">
+                    <label for="answerInput" class="block text-sm font-medium text-gray-700 mb-2">
+                        답안 입력
+                    </label>
+                    <textarea id="answerInput" 
+                              class="answer-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                              placeholder="들은 문장을 정확히 입력하세요..."
+                              rows="4"></textarea>
+                    
+                    <!-- 입력 도움말 -->
+                    <div class="mt-2 text-xs text-gray-500">
+                        <i class="fas fa-lightbulb mr-1"></i>
+                        팁: 답안을 정확히 입력한 후 제출 버튼을 눌러주세요.
+                    </div>
+                </div>
+
+                <!-- 답안 확인 영역 -->
+                <div id="answerFeedback" class="hidden mb-6 p-4 rounded-lg border-2">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-semibold">답안 확인</h4>
+                        <span id="questionScore" class="text-lg font-bold"></span>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div><strong>원문:</strong> <span id="originalSentence"></span></div>
+                        <div><strong>입력:</strong> <span id="userAnswer"></span></div>
+                        <div id="differences" class="hidden"><strong>차이점:</strong> <span id="differenceDetails"></span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 네비게이션 버튼 -->
+            <div class="navigation-buttons p-4">
+                <div class="flex justify-between">
+                    <button id="prevButton" class="btn-secondary" disabled>
+                        <i class="fas fa-chevron-left mr-2"></i>이전
+                    </button>
+                    
+                    <div class="flex space-x-3">
+                        <button id="showAnswerBtn" class="btn-secondary hidden">
+                            <i class="fas fa-eye mr-2"></i>정답 보기
+                        </button>
+                        <button id="submitAnswerBtn" class="btn-primary">
+                            <i class="fas fa-check mr-2"></i>답안 제출
+                        </button>
+                        <button id="nextButton" class="btn-primary hidden">
+                            <i class="fas fa-chevron-right mr-2"></i>다음
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 테스트 완료 화면 -->
+        <div id="completionScreen" class="hidden bg-white rounded-xl shadow-lg p-8 text-center">
+            <div class="mb-6">
+                <i class="fas fa-trophy text-6xl text-yellow-500 mb-4"></i>
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">테스트 완료!</h2>
+                <p class="text-gray-600">수고하셨습니다. 결과를 확인해보세요.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-blue-50 rounded-lg p-6">
+                    <div class="text-3xl font-bold text-blue-600 mb-2" id="finalScore">0%</div>
+                    <div class="text-sm text-gray-600">최종 점수</div>
+                </div>
+                <div class="bg-green-50 rounded-lg p-6">
+                    <div class="text-3xl font-bold text-green-600 mb-2" id="correctAnswers">0</div>
+                    <div class="text-sm text-gray-600">정답 개수</div>
+                </div>
+                <div class="bg-purple-50 rounded-lg p-6">
+                    <div class="text-3xl font-bold text-purple-600 mb-2" id="testDuration">0분</div>
+                    <div class="text-sm text-gray-600">소요 시간</div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <button id="viewDetailsBtn" class="btn-primary mr-4">
+                    <i class="fas fa-chart-bar mr-2"></i>상세 결과 보기
+                </button>
+                <button id="retryTestBtn" class="btn-secondary hidden">
+                    <i class="fas fa-redo mr-2"></i>다시 시도
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- 로딩 모달 -->
+    <div id="loadingModal" class="modal">
+        <div class="modal-content max-w-sm">
+            <div class="text-center py-8">
+                <div class="flex justify-center space-x-2 mb-4">
+                    <div class="loading-dots w-2 h-2 bg-blue-600 rounded-full"></div>
+                    <div class="loading-dots w-2 h-2 bg-blue-600 rounded-full"></div>
+                    <div class="loading-dots w-2 h-2 bg-blue-600 rounded-full"></div>
+                </div>
+                <p id="loadingMessage" class="text-gray-600">테스트를 준비하고 있습니다...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 시간 경고 모달 -->
+    <div id="timeWarningModal" class="modal">
+        <div class="modal-content max-w-sm">
+            <div class="modal-header">
+                <h3 class="text-red-600">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>시간 경고
+                </h3>
+            </div>
+            <div class="modal-body text-center">
+                <p class="mb-4">남은 시간이 <span id="warningTime">5분</span> 입니다.</p>
+                <p class="text-sm text-gray-600">서둘러 테스트를 완료해주세요.</p>
+                <button id="closeTimeWarning" class="btn-primary mt-4">확인</button>
+            </div>
+        </div>    </div>    <!-- Firebase 설정 및 초기화 -->
+    <script src="../js/firebase-config.js?v=4"></script>
+    <script src="../js/scoring.js"></script>
+      <script>
+        // 전역 변수
+        let testData = null;
+        let participantData = null;
+        let currentQuestionIndex = 0;
+        let answers = [];
+        let playCount = 0;
+        let maxPlayCount = 3;
+        let testStartTime = null;
+        let testTimer = null;
+        let timeLimit = 30; // 기본 30분
+        let currentSpeechRate = 1.0;
+        let currentUtterance = null;
+        let isTestPaused = false; // 테스트 일시정지 상태
+        let playCountStorage = {}; // 문제별 재생 횟수 저장        // 세션 데이터
+        let studentSession = JSON.parse(sessionStorage.getItem('studentSession') || '{}');        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('=== DOMContentLoaded 이벤트 발생 ===');
+            console.log('현재 URL:', window.location.href);
+            console.log('URL 파라미터:', window.location.search);
+            
+            // URL 파라미터에서 세션 정보 복원 시도
+            restoreSessionFromURL();
+            
+            // Firebase 초기화 대기
+            waitForFirebase();
+        });
+
+        // URL 파라미터에서 세션 정보 복원
+        function restoreSessionFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const testCode = urlParams.get('testCode');
+            const participantId = urlParams.get('participantId');
+            const participantName = urlParams.get('participantName');
+            
+            // URL 파라미터가 있고 세션 정보가 없거나 불완전한 경우
+            if (testCode && participantId && (!studentSession.testCode || !studentSession.participantId)) {
+                console.log('URL 파라미터에서 세션 정보 복원:', {
+                    testCode, 
+                    participantId, 
+                    participantName
+                });
+                
+                // 세션 정보 복원
+                studentSession = {
+                    testCode: testCode,
+                    participantId: participantId,
+                    participantName: participantName || 'Unknown',
+                    authenticatedAt: Date.now(),
+                    expiresAt: Date.now() + (24 * 60 * 60 * 1000), // 24시간 후 만료
+                    restoredFromURL: true
+                };
+                
+                // sessionStorage에 저장
+                sessionStorage.setItem('studentSession', JSON.stringify(studentSession));
+                
+                // URL에서 파라미터 제거 (보안상 이유로)
+                const newURL = window.location.pathname;
+                window.history.replaceState({}, document.title, newURL);
+                
+                console.log('URL 기반 세션 복원 완료');
+            }
+        }        function waitForFirebase() {
+            console.log('=== Firebase 초기화 대기 시작 ===');
+            console.log('Firebase 타입:', typeof firebase);
+            console.log('DB 타입:', typeof db);
+            
+            // Firebase와 Firestore가 모두 로드될 때까지 기다림 (최대 10초)
+            let attempts = 0;
+            const maxAttempts = 20; // 10초 (500ms * 20)
+            
+            function checkFirebase() {
+                attempts++;
+                
+                if (typeof firebase !== 'undefined' && typeof db !== 'undefined') {
+                    console.log('=== Firebase 초기화 완료 ===');
+                    console.log('Firebase 앱:', firebase.apps.length > 0 ? '초기화됨' : '초기화 안됨');
+                    console.log('Firestore DB:', db ? '사용 가능' : '사용 불가');
+                    
+                    initializeApp();
+                    return;
+                }
+                
+                if (attempts >= maxAttempts) {
+                    console.warn('=== Firebase 초기화 시간 초과 - 샘플 모드로 진행 ===');
+                    console.log('Firebase 없이 샘플 데이터로 테스트를 진행합니다.');
+                    initializeApp();
+                    return;
+                }
+                
+                console.log(`Firebase 로딩 중... (${attempts}/${maxAttempts})`);
+                setTimeout(checkFirebase, 500);
+            }
+            
+            checkFirebase();
+        }        function initializeApp() {
+            console.log('=== 앱 초기화 시작 ===');
+            console.log('현재 studentSession:', studentSession);
+            
+            // 세션 검증
+            if (!validateSession()) {
+                console.error('세션 검증 실패 - 메인 페이지로 이동');
+                alert('유효하지 않은 접근입니다. 다시 로그인해주세요.');
+                window.location.href = '../index.html';
+                return;
+            }
+
+            console.log('세션 검증 성공');
+            if (studentSession.testCode) {
+                console.log('테스트 코드:', studentSession.testCode);
+                console.log('참여자 ID:', studentSession.participantId);
+                console.log('참여자 이름:', studentSession.participantName);
+            } else {
+                console.log('샘플 모드로 진행');
+            }
+
+            initializeTest();
+            initializeEventListeners();
+            
+            console.log('=== 앱 초기화 완료 ===');
+        }// 세션 유효성 검증
+        function validateSession() {
+            console.log('=== 세션 검증 시작 ===');
+            console.log('studentSession:', studentSession);
+            
+            // 세션 정보가 전혀 없는 경우
+            if (!studentSession || Object.keys(studentSession).length === 0) {
+                console.log('세션 정보가 없습니다. URL 파라미터 확인...');
+                
+                // URL 파라미터 재확인
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('testCode') && urlParams.get('participantId')) {
+                    console.log('URL 파라미터 존재 - 세션 복원 재시도');
+                    restoreSessionFromURL();
+                    return studentSession && studentSession.testCode && studentSession.participantId;
+                }
+                
+                console.log('URL 파라미터도 없음 - 샘플 모드로 진행');
+                return true; // 샘플 모드로 진행
+            }
+
+            // 기본 필수 정보 확인
+            if (!studentSession.testCode || !studentSession.participantId) {
+                console.log('필수 세션 정보 누락 - 샘플 모드로 진행');
+                return true; // 샘플 모드로 진행
+            }
+
+            // 세션 만료 검증 (URL 복원된 세션은 더 관대하게)
+            if (studentSession.expiresAt && Date.now() > studentSession.expiresAt) {
+                console.warn('세션이 만료되었습니다.');
+                if (!studentSession.restoredFromURL && !studentSession.sampleMode) {
+                    sessionStorage.removeItem('studentSession');
+                    sessionStorage.removeItem('studentInfo');
+                    return false;
+                }
+            }
+
+            // 인증 시간 검증 (URL 복원된 세션은 48시간, 일반 세션은 24시간)
+            if (studentSession.authenticatedAt) {
+                const maxAge = studentSession.restoredFromURL ? (48 * 60 * 60 * 1000) : (24 * 60 * 60 * 1000);
+                if ((Date.now() - studentSession.authenticatedAt) > maxAge) {
+                    console.warn('인증이 만료되었습니다.');
+                    if (!studentSession.sampleMode) {
+                        return false;
+                    }
+                }
+            }
+
+            console.log('=== 세션 검증 완료 ===');
+            return true;
+        }// 로컬 스토리지에서 재생 횟수 데이터 로드
+        function loadPlayCountsFromStorage() {
+            try {
+                // studentSession 유효성 확인
+                if (!studentSession || !studentSession.testCode || !studentSession.participantId) {
+                    console.warn('studentSession 정보가 불완전합니다:', studentSession);
+                    playCountStorage = {};
+                    return;
+                }
+                
+                const storageKey = `playCount_${studentSession.testCode}_${studentSession.participantId}`;
+                const stored = localStorage.getItem(storageKey);
+                if (stored) {
+                    playCountStorage = JSON.parse(stored);
+                } else {
+                    playCountStorage = {};
+                }
+            } catch (error) {
+                console.error('재생 횟수 데이터 로드 오류:', error);
+                playCountStorage = {};
+            }
+        }        // 로컬 스토리지에 재생 횟수 데이터 저장
+        function savePlayCountsToStorage() {
+            try {
+                // studentSession 유효성 확인
+                if (!studentSession || !studentSession.testCode || !studentSession.participantId) {
+                    console.warn('studentSession 정보가 불완전하여 저장할 수 없습니다:', studentSession);
+                    return;
+                }
+                
+                const storageKey = `playCount_${studentSession.testCode}_${studentSession.participantId}`;
+                localStorage.setItem(storageKey, JSON.stringify(playCountStorage));
+            } catch (error) {
+                console.error('재생 횟수 데이터 저장 오류:', error);
+            }
+        }
+
+        // 현재 문제의 재생 횟수 가져오기
+        function getCurrentQuestionPlayCount() {
+            const questionKey = `q_${currentQuestionIndex}`;
+            return playCountStorage[questionKey] || 0;
+        }
+
+        // 현재 문제의 재생 횟수 증가
+        function incrementCurrentQuestionPlayCount() {
+            const questionKey = `q_${currentQuestionIndex}`;
+            playCountStorage[questionKey] = (playCountStorage[questionKey] || 0) + 1;
+            savePlayCountsToStorage();
+        }        // 테스트 초기화
+        async function initializeTest() {
+            try {
+                console.log('=== 테스트 초기화 시작 ===');
+                console.log('studentSession:', studentSession);
+                console.log('Firebase db 타입:', typeof db);
+                
+                showLoading('테스트 데이터를 불러오는 중...');
+                
+                // Firebase db 객체 확인
+                if (typeof db === 'undefined') {
+                    throw new Error('Firebase 데이터베이스가 초기화되지 않았습니다.');
+                }
+                
+                // studentSession 확인
+                if (!studentSession || !studentSession.testCode) {
+                    console.warn('세션 정보가 불완전합니다. 샘플 데이터로 대체합니다.');
+                    // 샘플 데이터로 테스트 진행
+                    await initializeSampleTest();
+                    return;
+                }
+                
+                console.log('테스트 코드로 문서 조회 시작:', studentSession.testCode);
+                
+                // 테스트 데이터 로드 시도
+                try {
+                    const testDoc = await db.collection('tests').doc(studentSession.testCode).get();
+                    console.log('테스트 문서 조회 완료. exists:', testDoc.exists);
+                    
+                    if (!testDoc.exists) {
+                        console.warn('테스트 문서가 존재하지 않습니다. 샘플 데이터로 대체합니다.');
+                        await initializeSampleTest();
+                        return;
+                    }
+                    
+                    testData = testDoc.data();
+                    console.log('테스트 데이터 로드 완료:', testData);
+
+                    // 참여자 데이터는 테스트 문서의 participants 필드에서 가져오기
+                    const participants = testData.participants || {};
+                    participantData = participants[studentSession.participantId];
+                    
+                    if (!participantData) {
+                        console.warn('참여자 정보를 찾을 수 없습니다. 새 참여자로 생성합니다.');
+                        participantData = {
+                            name: studentSession.participantName || 'Test Student',
+                            studentId: 'TEST001',
+                            status: 'pending',
+                            joinedAt: new Date(),
+                            answers: [],
+                            score: 0
+                        };
+                    }
+
+                    // UI 초기화
+                    await initializeUI();
+                    
+                } catch (firebaseError) {
+                    console.warn('Firebase 연결 실패:', firebaseError);
+                    console.log('샘플 데이터로 테스트 진행합니다.');
+                    await initializeSampleTest();
+                    return;
+                }
+                
+                hideLoading();
+                console.log('=== 테스트 초기화 완료 ===');
+                  
+            } catch (error) {
+                console.error('테스트 초기화 오류:', error);
+                console.log('샘플 데이터로 테스트를 시도합니다.');
+                
+                try {
+                    await initializeSampleTest();
+                } catch (sampleError) {
+                    console.error('샘플 테스트 초기화도 실패:', sampleError);
+                    alert('테스트 초기화에 실패했습니다. 페이지를 새로고침하거나 관리자에게 문의하세요.');
+                    hideLoading();
+                }
+            }
+        }
+
+        // 샘플 테스트 데이터로 초기화
+        async function initializeSampleTest() {
+            console.log('=== 샘플 테스트 초기화 ===');
+            
+            // 샘플 테스트 데이터
+            testData = {
+                title: '샘플 받아쓰기 테스트',
+                settings: {
+                    timeLimit: 1800, // 30분 (초 단위)
+                    allowRetries: true,
+                    maxAttempts: 3
+                },
+                sentences: [
+                    { 
+                        text: "Hello, how are you today?",
+                        difficulty: "easy",
+                        points: 10
+                    },
+                    { 
+                        text: "The weather is very nice today.",
+                        difficulty: "easy", 
+                        points: 10
+                    },
+                    { 
+                        text: "I like to read books in the evening.",
+                        difficulty: "medium",
+                        points: 15
+                    },
+                    { 
+                        text: "She has been studying English for three years.",
+                        difficulty: "medium",
+                        points: 15
+                    },
+                    { 
+                        text: "The sophisticated technology revolutionized our understanding.",
+                        difficulty: "hard",
+                        points: 20
+                    }
+                ],
+                createdAt: new Date(),
+                createdBy: 'system'
+            };
+            
+            // 샘플 참여자 데이터
+            participantData = {
+                name: studentSession.participantName || 'Sample Student',
+                studentId: studentSession.participantId || 'SAMPLE001',
+                status: 'pending',
+                joinedAt: new Date(),
+                answers: [],
+                score: 0
+            };
+            
+            // 세션 정보가 없으면 샘플로 생성
+            if (!studentSession.testCode) {
+                studentSession = {
+                    testCode: 'SAMPLE_TEST',
+                    participantId: 'sample001',
+                    participantName: 'Sample Student',
+                    authenticatedAt: Date.now(),
+                    expiresAt: Date.now() + (24 * 60 * 60 * 1000),
+                    sampleMode: true
+                };
+                sessionStorage.setItem('studentSession', JSON.stringify(studentSession));
+            }
+            
+            console.log('샘플 테스트 데이터:', testData);
+            console.log('샘플 참여자 데이터:', participantData);
+            
+            // UI 초기화
+            await initializeUI();
+            hideLoading();
+            
+            console.log('=== 샘플 테스트 초기화 완료 ===');
+        }// 진행률 업데이트 함수
+        function updateProgress() {
+            try {
+                const totalQuestions = testData?.sentences?.length || 0;
+                const currentProgress = Math.min(currentQuestionIndex, totalQuestions);
+                const progressPercentage = totalQuestions > 0 ? (currentProgress / totalQuestions) * 100 : 0;
+                
+                // 진행률 바 업데이트
+                const progressBar = document.getElementById('progressBar');
+                if (progressBar) {
+                    progressBar.style.width = progressPercentage + '%';
+                }
+                
+                // 진행률 텍스트 업데이트
+                const progressText = document.getElementById('progressText');
+                if (progressText) {
+                    progressText.textContent = `${currentProgress} / ${totalQuestions}`;
+                }
+                
+                console.log(`진행률 업데이트: ${currentProgress}/${totalQuestions} (${progressPercentage.toFixed(1)}%)`);
+                
+            } catch (error) {
+                console.error('진행률 업데이트 오류:', error);
+            }
+        }        // UI 초기화
+        async function initializeUI() {
+            // 헤더 정보
+            document.getElementById('testTitle').textContent = testData.title || '받아쓰기 테스트';
+            document.getElementById('studentInfo').textContent = 
+                `${participantData.name} (${participantData.studentId})`;            // 시간 제한 설정 (null 체크를 정확히 수행)
+            const testTimeLimit = testData.settings?.timeLimit;
+            
+            console.log('시간 제한 데이터:', {
+                rawTimeLimit: testTimeLimit,
+                type: typeof testTimeLimit,
+                isNull: testTimeLimit === null,
+                isUndefined: testTimeLimit === undefined
+            });
+            
+            // timeLimitDisplay 요소 확인
+            const timeLimitDisplayElement = document.getElementById('timeLimitDisplay');
+            if (!timeLimitDisplayElement) {
+                console.error('timeLimitDisplay 요소를 찾을 수 없습니다!');
+            }
+            
+            if (testTimeLimit === null || testTimeLimit === undefined) {
+                // 시간 제한 없음
+                timeLimit = null;
+                if (timeLimitDisplayElement) {
+                    timeLimitDisplayElement.textContent = '제한 없음';
+                }
+                // 시간 제한 정보 섹션 숨기기
+                const timeLimitInfo = document.getElementById('timeLimitInfo');
+                if (timeLimitInfo) {
+                    timeLimitInfo.style.display = 'none';
+                }
+                // 타이머 UI 숨기기
+                const timerElement = document.querySelector('.timer');
+                if (timerElement) {
+                    timerElement.style.display = 'none';
+                }
+                const timeProgressContainer = document.getElementById('timeProgressContainer');
+                if (timeProgressContainer) {
+                    timeProgressContainer.style.display = 'none';
+                }
+                console.log('시간 제한 없음 - 타이머 UI 숨김');
+            } else {
+                // 시간 제한 있음 (초 단위를 분 단위로 변환)
+                timeLimit = Math.ceil(testTimeLimit / 60); // 초를 분으로 변환
+                if (timeLimitDisplayElement) {
+                    timeLimitDisplayElement.textContent = timeLimit + '분';
+                }
+                // 시간 제한 정보 섹션 표시
+                const timeLimitInfo = document.getElementById('timeLimitInfo');
+                if (timeLimitInfo) {
+                    timeLimitInfo.style.display = 'block';
+                }
+                // 타이머 UI 표시
+                const timerElement = document.querySelector('.timer');
+                if (timerElement) {
+                    timerElement.style.display = 'block';
+                }
+                const timeProgressContainer = document.getElementById('timeProgressContainer');
+                if (timeProgressContainer) {
+                    timeProgressContainer.classList.remove('hidden');
+                }
+                console.log(`시간 제한 설정: ${testTimeLimit}초 = ${timeLimit}분`);
+            }
+              // 테스트 시작 버튼 활성화
+            const startTestBtn = document.getElementById('startTestBtn');
+            if (startTestBtn) {
+                startTestBtn.disabled = false;
+                startTestBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'disabled:opacity-50', 'disabled:cursor-not-allowed');
+                startTestBtn.removeAttribute('disabled');
+                console.log('테스트 시작 버튼 활성화됨');
+            } else {
+                console.error('startTestBtn 요소를 찾을 수 없습니다!');
+            }
+            
+            // 추가 안전장치: 1초 후 다시 한 번 확인
+            setTimeout(() => {
+                const btn = document.getElementById('startTestBtn');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    btn.removeAttribute('disabled');
+                    console.log('테스트 시작 버튼 재확인 완료');
+                }            }, 1000);
+            
+            // 총 문제 수 표시
+            const totalQuestionsElement = document.getElementById('totalQuestions');
+            if (totalQuestionsElement) {
+                totalQuestionsElement.textContent = testData.sentences?.length || 0;
+            }
+
+            // 진행률 초기화
+            updateProgress();// 기존 답안이 있으면 복원
+            if (participantData.answers) {
+                answers = participantData.answers;
+                currentQuestionIndex = answers.length;
+                if (currentQuestionIndex >= testData.sentences.length) {
+                    // 이미 완료된 테스트
+                    showCompletionScreen();
+                    return;
+                }
+            }            // 기존 테스트 진행 상황 복원 (시간 포함)
+            // 1. 서버 데이터에서 복원 (우선순위)
+            let useServerData = false;
+            
+            if (participantData.status === 'in-progress') {
+                console.log('서버에서 진행 중인 테스트 발견');
+                
+                // 서버에서 실제 시작 시간 복원
+                if (participantData.actualStartTime) {
+                    testStartTime = participantData.actualStartTime.toDate ? 
+                        participantData.actualStartTime.toDate() : 
+                        new Date(participantData.actualStartTime);
+                    
+                    console.log('서버에서 복원된 테스트 시작 시간:', testStartTime);
+                    useServerData = true;
+                }
+                
+                // 답안 복원
+                if (participantData.answers && Array.isArray(participantData.answers)) {
+                    answers = participantData.answers;
+                    currentQuestionIndex = participantData.currentQuestion || answers.length;
+                    console.log(`서버에서 복원: 답안 ${answers.length}개, 현재 문제 ${currentQuestionIndex}`);
+                }
+                
+                // 시간 제한이 있는 경우 남은 시간 확인
+                if (timeLimit !== null && timeLimit !== undefined && testStartTime) {
+                    const elapsedTime = Date.now() - testStartTime.getTime();
+                    const totalTimeMs = timeLimit * 60 * 1000;
+                    const remainingTime = totalTimeMs - elapsedTime;
+                    
+                    console.log(`서버 기반 시간 계산: 경과 ${Math.round(elapsedTime / 1000)}초, 남은 ${Math.round(remainingTime / 1000)}초`);
+                    
+                    if (remainingTime <= 0) {
+                        console.log('서버 확인 결과: 시간 초과 - 자동 제출');
+                        alert('제한 시간이 초과되었습니다. 테스트가 자동으로 제출됩니다.');
+                        await submitTest(true);
+                        return;
+                    }
+                }
+            }
+              // 2. localStorage 백업 확인 (서버 데이터가 없거나 오래된 경우에만)
+            const backupKey = `dictation_progress_${studentSession.testCode}_${studentSession.participantId}`;
+            const emergencyKey = `dictation_emergency_${studentSession.testCode}_${studentSession.participantId}`;
+            
+            // 일반 백업과 긴급 백업 모두 확인
+            const backupData = localStorage.getItem(backupKey);
+            const emergencyData = localStorage.getItem(emergencyKey);
+            
+            if (!useServerData && (backupData || emergencyData)) {
+                try {
+                    // 더 최신 백업 선택
+                    let selectedBackup = null;
+                    let backupSource = '';
+                    
+                    if (backupData && emergencyData) {
+                        const backup = JSON.parse(backupData);
+                        const emergency = JSON.parse(emergencyData);
+                        if (backup.lastSaveTime > emergency.lastSaveTime) {
+                            selectedBackup = backup;
+                            backupSource = 'normal';
+                        } else {
+                            selectedBackup = emergency;
+                            backupSource = 'emergency';
+                        }
+                    } else if (backupData) {
+                        selectedBackup = JSON.parse(backupData);
+                        backupSource = 'normal';
+                    } else if (emergencyData) {
+                        selectedBackup = JSON.parse(emergencyData);
+                        backupSource = 'emergency';
+                    }
+                    
+                    if (selectedBackup) {
+                        const backupAge = Date.now() - selectedBackup.lastSaveTime;
+                        
+                        // 백업이 10분 이내이고 유효한 경우에만 사용 (긴급 백업은 더 관대하게)
+                        const maxAge = backupSource === 'emergency' ? 600000 : 300000; // 10분 vs 5분
+                        
+                        if (backupAge < maxAge && selectedBackup.status === 'in-progress') {
+                            console.log(`서버 데이터 없음 - ${backupSource} 백업 사용 (${Math.round(backupAge/1000)}초 전)`);
+                            
+                            // 백업 데이터로 복원
+                            answers = selectedBackup.answers || [];
+                            currentQuestionIndex = selectedBackup.currentQuestion || 0;
+                            testStartTime = new Date(selectedBackup.actualStartTime);
+                            
+                            console.log('백업에서 복원된 데이터:', {
+                                answers: answers.length,
+                                currentQuestion: currentQuestionIndex,
+                                startTime: testStartTime,
+                                source: backupSource
+                            });
+                            
+                            // 백업 데이터를 즉시 서버에 동기화
+                            setTimeout(async () => {
+                                await saveProgressImmediate();
+                                console.log('백업 데이터 서버 동기화 완료');
+                            }, 1000);
+                        }
+                    }
+                } catch (error) {
+                    console.error('백업 데이터 파싱 오류:', error);
+                }
+                
+                // 백업 데이터 정리
+                localStorage.removeItem(backupKey);
+                localStorage.removeItem(emergencyKey);
+            }
+            
+            // 현재 문제 인덱스 복원 및 검증
+            if (currentQuestionIndex >= testData.sentences.length) {
+                currentQuestionIndex = testData.sentences.length - 1;
+            }
+
+            // 재시도 불가능한 경우 체크
+            if (participantData.status === 'completed' && !testData.settings?.allowRetries) {
+                alert('이미 완료된 테스트입니다.');
+                window.location.href = 'result.html';
+                return;
+            }
+
+            // 로컬 스토리지에서 재생 횟수 데이터 로드
+            loadPlayCountsFromStorage();
+        }
+
+        // 이벤트 리스너 초기화
+        function initializeEventListeners() {
+            // 테스트 시작
+            document.getElementById('startTestBtn').addEventListener('click', startTest);
+            
+            // 오디오 테스트
+            document.getElementById('testAudioBtn').addEventListener('click', testAudio);
+            
+            // 음성 재생
+            document.getElementById('playButton').addEventListener('click', playCurrentSentence);
+            
+            // 속도 조절
+            document.getElementById('speedSlowBtn').addEventListener('click', () => setSpeechRate(0.8));
+            document.getElementById('speedNormalBtn').addEventListener('click', () => setSpeechRate(1.0));
+            document.getElementById('speedFastBtn').addEventListener('click', () => setSpeechRate(1.2));
+            
+            // 답안 제출
+            document.getElementById('submitAnswerBtn').addEventListener('click', submitAnswer);
+            
+            // 네비게이션
+            document.getElementById('nextButton').addEventListener('click', nextQuestion);
+            document.getElementById('prevButton').addEventListener('click', prevQuestion);
+            
+            // 완료 화면
+            document.getElementById('viewDetailsBtn').addEventListener('click', () => {
+                window.location.href = 'result.html';
+            });
+            
+            document.getElementById('retryTestBtn').addEventListener('click', retryTest);
+            
+            // 시간 경고 닫기
+            document.getElementById('closeTimeWarning').addEventListener('click', () => {
+                document.getElementById('timeWarningModal').style.display = 'none';
+            });
+
+            // 답안 입력 변화 감지 (제출 버튼 활성화만)
+            document.getElementById('answerInput').addEventListener('input', function(e) {
+                const input = e.target.value;
+                const submitBtn = document.getElementById('submitAnswerBtn');
+                
+                // 입력이 있으면 제출 버튼 활성화
+                if (input.trim()) {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    submitBtn.disabled = true;
+                    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            });            // 키보드 단축키
+            document.addEventListener('keydown', handleKeyPress);
+              // 페이지 언로드 시 진행 상황 저장 (다양한 이벤트 감지)
+            let isUnloading = false;
+            
+            // 1. beforeunload 이벤트 (새로고침, 뒤로가기, 창 닫기)
+            window.addEventListener('beforeunload', (e) => {
+                if (testStartTime && participantData?.status === 'in-progress') {
+                    isUnloading = true;
+                    saveProgressSync(); // 동기적 저장
+                    
+                    // 사용자에게 경고 메시지 표시 (선택사항)
+                    e.preventDefault();
+                    e.returnValue = '테스트 진행 중입니다. 페이지를 떠나시겠습니까?';
+                    return e.returnValue;
+                }
+            });
+            
+            // 2. pagehide 이벤트 (페이지가 숨겨질 때)
+            window.addEventListener('pagehide', (e) => {
+                if (testStartTime && participantData?.status === 'in-progress' && !isUnloading) {
+                    saveProgressSync();
+                }
+            });
+            
+            // 3. unload 이벤트 (페이지가 언로드될 때)
+            window.addEventListener('unload', (e) => {
+                if (testStartTime && participantData?.status === 'in-progress') {
+                    saveProgressSync();
+                }
+            });
+            
+            // 4. visibilitychange 이벤트 (탭 전환 등)
+            document.addEventListener('visibilitychange', () => {
+                if (testStartTime && participantData?.status === 'in-progress') {
+                    if (document.hidden) {
+                        // 페이지가 숨겨질 때 저장
+                        saveProgressImmediate();
+                    } else {
+                        // 페이지가 다시 보이게 될 때 활성 상태 업데이트
+                        updateLastActiveTime();
+                        // 시간 동기화 확인
+                        syncTimeWithServer();
+                    }
+                }
+            });
+            
+            // 5. 주기적 저장 (답안 제출 시에만, 30초마다)
+            let lastSaveTime = 0;
+            const saveInterval = 30000; // 30초
+        }        // 동기적 진행 상황 저장 (페이지 언로드 시 사용)
+        function saveProgressSync() {
+            if (!studentSession || !testStartTime) return;
+            
+            try {
+                const currentTime = Date.now();
+                const elapsedTime = currentTime - testStartTime.getTime();
+                const remainingTime = timeLimit !== null ? 
+                    Math.max(0, (timeLimit * 60 * 1000) - elapsedTime) : null;
+
+                // 1. 우선 서버에 저장 시도 (동기적)
+                const updateData = {
+                    [`participants.${studentSession.participantId}.answers`]: answers,
+                    [`participants.${studentSession.participantId}.currentQuestion`]: currentQuestionIndex,
+                    [`participants.${studentSession.participantId}.elapsedTime`]: elapsedTime,
+                    [`participants.${studentSession.participantId}.actualStartTime`]: testStartTime,
+                    [`participants.${studentSession.participantId}.lastSaveTime`]: firebase.firestore.FieldValue.serverTimestamp(),
+                    [`participants.${studentSession.participantId}.lastActiveAt`]: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                if (remainingTime !== null) {
+                    updateData[`participants.${studentSession.participantId}.remainingTime`] = remainingTime;
+                }
+                
+                // Firestore에 즉시 저장 (동기적)
+                db.collection('tests').doc(studentSession.testCode).update(updateData);
+                
+                // 2. localStorage에도 백업 저장 (서버 실패 시 대비)
+                const backupData = {
+                    testCode: studentSession.testCode,
+                    participantId: studentSession.participantId,
+                    answers: answers,
+                    currentQuestion: currentQuestionIndex,
+                    elapsedTime: elapsedTime,
+                    remainingTime: remainingTime,
+                    actualStartTime: testStartTime.getTime(),
+                    lastSaveTime: currentTime,
+                    status: 'in-progress',
+                    saveMethod: 'sync'
+                };
+                
+                localStorage.setItem(`dictation_progress_${studentSession.testCode}_${studentSession.participantId}`, 
+                    JSON.stringify(backupData));
+                
+                console.log('동기적 진행 상황 저장 완료 (서버 + 백업)');
+            } catch (error) {
+                console.error('동기적 저장 오류:', error);
+                // 서버 저장 실패 시 로컬스토리지만이라도 저장
+                try {
+                    const backupData = {
+                        testCode: studentSession.testCode,
+                        participantId: studentSession.participantId,
+                        answers: answers,
+                        currentQuestion: currentQuestionIndex,
+                        actualStartTime: testStartTime.getTime(),
+                        lastSaveTime: Date.now(),
+                        status: 'in-progress',
+                        saveMethod: 'emergency'
+                    };
+                    localStorage.setItem(`dictation_emergency_${studentSession.testCode}_${studentSession.participantId}`, 
+                        JSON.stringify(backupData));
+                    console.log('긴급 백업 저장 완료');
+                } catch (emergencyError) {
+                    console.error('긴급 백업도 실패:', emergencyError);
+                }
+            }
+        }        // 즉시 진행 상황 저장 (비동기)
+        async function saveProgressImmediate() {
+            if (!studentSession || !testStartTime) return;
+            
+            // 샘플 모드인 경우 로컬에서만 저장
+            if (studentSession.sampleMode) {
+                console.log('샘플 모드 - 로컬 저장만 수행');
+                // 로컬 변수 업데이트
+                participantData.answers = answers;
+                participantData.currentQuestion = currentQuestionIndex;
+                participantData.lastSaveTime = new Date();
+                return;
+            }
+            
+            try {
+                const currentTime = Date.now();
+                const elapsedTime = currentTime - testStartTime.getTime();
+                const remainingTime = timeLimit !== null ? 
+                    Math.max(0, (timeLimit * 60 * 1000) - elapsedTime) : null;
+
+                const updateData = {
+                    [`participants.${studentSession.participantId}.answers`]: answers,
+                    [`participants.${studentSession.participantId}.currentQuestion`]: currentQuestionIndex,
+                    [`participants.${studentSession.participantId}.elapsedTime`]: elapsedTime,
+                    [`participants.${studentSession.participantId}.lastSaveTime`]: firebase.firestore.FieldValue.serverTimestamp(),
+                    [`participants.${studentSession.participantId}.lastActiveAt`]: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                if (remainingTime !== null) {
+                    updateData[`participants.${studentSession.participantId}.remainingTime`] = remainingTime;
+                }
+                
+                await db.collection('tests').doc(studentSession.testCode).update(updateData);
+                console.log('즉시 진행 상황 저장 완료');
+                
+            } catch (error) {
+                console.warn('즉시 저장 오류 (계속 진행):', error);
+            }
+        }// 서버 시간과 동기화 (더 정확한 동기화)
+        async function syncTimeWithServer() {
+            if (!studentSession || !testStartTime) return;
+            
+            try {
+                console.log('서버 시간 동기화 시작...');
+                
+                // 서버에서 현재 참여자 데이터 조회
+                const testDoc = await db.collection('tests').doc(studentSession.testCode).get();
+                if (!testDoc.exists) {
+                    console.warn('테스트 문서가 존재하지 않음');
+                    return;
+                }
+                
+                const testData = testDoc.data();
+                const serverParticipantData = testData.participants?.[studentSession.participantId];
+                
+                if (serverParticipantData) {
+                    // 서버에 저장된 실제 시작 시간 확인
+                    if (serverParticipantData.actualStartTime) {
+                        const serverStartTime = serverParticipantData.actualStartTime.toDate();
+                        const localStartTime = testStartTime;
+                        const timeDiff = Math.abs(localStartTime.getTime() - serverStartTime.getTime());
+                        
+                        console.log('시간 동기화 확인:', {
+                            server: serverStartTime,
+                            local: localStartTime,
+                            diff: `${timeDiff}ms`,
+                            needsSync: timeDiff > 2000
+                        });
+                        
+                        // 2초 이상 차이나면 서버 시간으로 동기화
+                        if (timeDiff > 2000) {
+                            console.log('⚠️ 시간 불일치 감지 - 서버 시간으로 동기화');
+                            
+                            testStartTime = serverStartTime;
+                            
+                            // 타이머가 실행 중이면 재시작
+                            if (testTimer && timeLimit !== null) {
+                                clearInterval(testTimer);
+                                startTimer();
+                                console.log('타이머 재시작됨');
+                            }
+                            
+                            // 시간 초과 여부 재확인
+                            if (timeLimit !== null) {
+                                const elapsedTime = Date.now() - testStartTime.getTime();
+                                const totalTimeMs = timeLimit * 60 * 1000;
+                                const remainingTime = totalTimeMs - elapsedTime;
+                                
+                                if (remainingTime <= 0) {
+                                    console.log('동기화 후 시간 초과 감지 - 자동 제출');
+                                    alert('제한 시간이 초과되었습니다. 테스트가 자동으로 제출됩니다.');
+                                    await submitTest(true);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 답안과 진행 상황도 서버 기준으로 동기화
+                    if (serverParticipantData.answers && Array.isArray(serverParticipantData.answers)) {
+                        const serverAnswerCount = serverParticipantData.answers.length;
+                        const localAnswerCount = answers.length;
+                        
+                        if (serverAnswerCount > localAnswerCount) {
+                            console.log(`답안 동기화: 서버 ${serverAnswerCount}개 > 로컬 ${localAnswerCount}개`);
+                            answers = serverParticipantData.answers;
+                            currentQuestionIndex = serverParticipantData.currentQuestion || answers.length;
+                            
+                            // UI 업데이트
+                            updateProgress();
+                            if (currentQuestionIndex < testData.sentences?.length) {
+                                loadQuestion(currentQuestionIndex);
+                            }
+                        }
+                    }
+                }
+                
+                console.log('서버 시간 동기화 완료');
+            } catch (error) {
+                console.error('시간 동기화 오류:', error);
+            }
+        }        // 테스트 시작
+        async function startTest() {
+            try {
+                console.log('=== 테스트 시작 ===');
+                console.log('샘플 모드:', studentSession.sampleMode);
+                
+                testStartTime = new Date();
+                
+                // 샘플 모드가 아닌 경우에만 Firebase 업데이트
+                if (!studentSession.sampleMode && typeof db !== 'undefined') {
+                    try {
+                        const testRef = db.collection('tests').doc(studentSession.testCode);
+                        await testRef.update({
+                            [`participants.${studentSession.participantId}.status`]: 'in-progress',
+                            [`participants.${studentSession.participantId}.startedAt`]: firebase.firestore.FieldValue.serverTimestamp(),
+                            [`participants.${studentSession.participantId}.actualStartTime`]: testStartTime,
+                            [`participants.${studentSession.participantId}.currentQuestion`]: 0,
+                            [`participants.${studentSession.participantId}.lastActiveAt`]: firebase.firestore.FieldValue.serverTimestamp(),
+                            [`participants.${studentSession.participantId}.progress`]: 0,
+                            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        console.log('Firebase 상태 업데이트 완료');
+                    } catch (firebaseError) {
+                        console.warn('Firebase 업데이트 실패 (계속 진행):', firebaseError);
+                    }
+                } else {
+                    console.log('샘플 모드 또는 Firebase 없음 - 로컬에서만 진행');
+                    participantData.status = 'in-progress';
+                    participantData.startedAt = testStartTime;
+                    participantData.actualStartTime = testStartTime;
+                }
+
+                // UI 전환
+                document.getElementById('startScreen').classList.add('hidden');
+                document.getElementById('testScreen').classList.remove('hidden');
+                
+                // 타이머 시작
+                startTimer();
+                
+                // 실시간 모니터링을 위한 heartbeat 시작 (Firebase 연결 시만)
+                if (!studentSession.sampleMode) {
+                    startHeartbeat();
+                }
+                
+                // 첫 번째 문제 로드
+                loadQuestion(0);
+                
+                console.log('=== 테스트 시작 완료 ===');
+                
+            } catch (error) {
+                console.error('테스트 시작 오류:', error);
+                alert('테스트 시작 중 오류가 발생했습니다: ' + error.message);
+            }
+        }// 타이머 시작
+        function startTimer() {
+            // 시간 제한이 없으면 타이머를 시작하지 않음
+            if (timeLimit === null || timeLimit === undefined) {
+                console.log('시간 제한이 없습니다. 타이머를 시작하지 않습니다.');
+                return;
+            }
+            
+            // 실제 시작 시간이 없으면 현재 시간으로 설정 (새로 시작하는 경우)
+            if (!testStartTime) {
+                testStartTime = new Date();
+                console.log('새로운 테스트 시작 시간 설정:', testStartTime);
+            }
+            
+            const totalTime = timeLimit * 60 * 1000; // 분을 밀리초로 변환
+            const elapsedTime = Date.now() - testStartTime.getTime(); // 이미 경과된 시간
+            const remainingTime = Math.max(0, totalTime - elapsedTime); // 남은 시간
+            
+            console.log(`타이머 시작: 전체 ${timeLimit}분, 경과 ${Math.round(elapsedTime / 1000)}초, 남은 ${Math.round(remainingTime / 1000)}초`);
+            
+            // 이미 시간이 초과된 경우
+            if (remainingTime <= 0) {
+                console.log('시간 초과 - 즉시 종료');
+                timeUp();
+                return;
+            }
+            
+            // 시간 진행 프로그래스 바 표시
+            document.getElementById('timeProgressContainer').classList.remove('hidden');
+              testTimer = setInterval(() => {
+                const now = new Date();
+                const currentElapsedTime = now.getTime() - testStartTime.getTime();
+                const currentRemainingTime = Math.max(0, totalTime - currentElapsedTime);
+                
+                if (currentRemainingTime <= 0) {
+                    // 시간 종료
+                    clearInterval(testTimer);
+                    timeUp();
+                    return;
+                }
+                
+                // 시간 표시 업데이트
+                const minutes = Math.floor(currentRemainingTime / 60000);
+                const seconds = Math.floor((currentRemainingTime % 60000) / 1000);
+                const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                document.getElementById('timeRemaining').textContent = timeString;
+                document.getElementById('timeRemainingText').textContent = timeString;
+                
+                // 시간 진행 프로그래스 바 업데이트
+                const progressPercentage = Math.max(0, (currentRemainingTime / totalTime) * 100);
+                const progressBar = document.getElementById('timeProgressBar');
+                progressBar.style.width = progressPercentage + '%';
+                  // 진행률에 따라 색상 변경
+                if (progressPercentage > 50) {
+                    progressBar.className = 'bg-gradient-to-r from-green-500 to-green-400 h-2 rounded-full transition-all duration-1000';
+                } else if (progressPercentage > 25) {
+                    progressBar.className = 'bg-gradient-to-r from-yellow-500 to-yellow-400 h-2 rounded-full transition-all duration-1000';
+                } else {
+                    progressBar.className = 'bg-gradient-to-r from-red-500 to-red-400 h-2 rounded-full transition-all duration-1000';
+                }
+                
+                // 시간 경고 알림
+                if (currentRemainingTime <= 5 * 60 * 1000 && currentRemainingTime > 4 * 60 * 1000 && !window.fiveMinuteWarningShown) {
+                    window.fiveMinuteWarningShown = true;
+                    showTimeWarning('5분 남았습니다!', 'warning');
+                } else if (currentRemainingTime <= 2 * 60 * 1000 && currentRemainingTime > 1 * 60 * 1000 && !window.twoMinuteWarningShown) {
+                    window.twoMinuteWarningShown = true;
+                    showTimeWarning('2분 남았습니다!', 'danger');
+                } else if (currentRemainingTime <= 30 * 1000 && currentRemainingTime > 29 * 1000 && !window.thirtySecondWarningShown) {
+                    window.thirtySecondWarningShown = true;
+                    showTimeWarning('30초 남았습니다!', 'critical');
+                }
+                
+            }, 1000);
+        }
+
+        // 로딩 모달 표시
+        function showLoading(message = '로딩 중...') {
+            const modal = document.getElementById('loadingModal');
+            const messageElement = document.getElementById('loadingMessage');
+            if (modal && messageElement) {
+                messageElement.textContent = message;
+                modal.style.display = 'flex';
+            }
+        }
+
+        // 로딩 모달 숨기기
+        function hideLoading() {
+            const modal = document.getElementById('loadingModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // 시간 경고 표시
+        function showTimeWarning(message, type = 'warning') {
+            const modal = document.getElementById('timeWarningModal');
+            const warningTimeElement = document.getElementById('warningTime');
+            if (modal && warningTimeElement) {
+                warningTimeElement.textContent = message;
+                modal.style.display = 'flex';
+                
+                // 자동으로 3초 후 닫기
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        // 시간 초과 처리
+        async function timeUp() {
+            console.log('시간 초과!');
+            clearInterval(testTimer);
+            
+            alert('시간이 초과되었습니다. 테스트가 자동으로 제출됩니다.');
+            await submitTest(true);
+        }
+
+        // 문제 로드
+        function loadQuestion(index) {
+            if (!testData || !testData.sentences || index >= testData.sentences.length) {
+                console.error('문제 로드 실패: 유효하지 않은 인덱스 또는 데이터');
+                return;
+            }
+
+            currentQuestionIndex = index;
+            const sentence = testData.sentences[index];
+            
+            // UI 업데이트
+            document.getElementById('currentQuestionNumber').textContent = index + 1;
+            document.getElementById('totalQuestions').textContent = testData.sentences.length;
+            
+            // 재생 횟수 초기화
+            playCount = getCurrentQuestionPlayCount();
+            document.getElementById('playCount').textContent = playCount;
+            
+            // 답안 입력란 초기화
+            document.getElementById('answerInput').value = answers[index] || '';
+            
+            // 버튼 상태 업데이트
+            updateNavigationButtons();
+            
+            console.log(`문제 ${index + 1} 로드됨:`, sentence.text);
+        }
+
+        // 네비게이션 버튼 상태 업데이트
+        function updateNavigationButtons() {
+            const prevBtn = document.getElementById('prevButton');
+            const nextBtn = document.getElementById('nextButton');
+            const submitBtn = document.getElementById('submitAnswerBtn');
+            
+            if (prevBtn) {
+                prevBtn.disabled = currentQuestionIndex === 0;
+            }
+            
+            if (nextBtn) {
+                nextBtn.style.display = currentQuestionIndex >= testData.sentences.length - 1 ? 'none' : 'inline-flex';
+            }
+            
+            if (submitBtn) {
+                const input = document.getElementById('answerInput').value.trim();
+                submitBtn.disabled = !input;
+                if (input) {
+                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            }
+        }
+
+        // 현재 문장 음성 재생
+        function playCurrentSentence() {
+            if (!testData || !testData.sentences || currentQuestionIndex >= testData.sentences.length) {
+                console.error('재생할 문장이 없습니다.');
+                return;
+            }
+
+            if (playCount >= maxPlayCount) {
+                alert(`이 문제는 최대 ${maxPlayCount}번만 들을 수 있습니다.`);
+                return;
+            }
+
+            const sentence = testData.sentences[currentQuestionIndex];
+            const text = sentence.text;
+
+            // 음성 합성
+            if ('speechSynthesis' in window) {
+                // 기존 음성 중지
+                window.speechSynthesis.cancel();
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = currentSpeechRate;
+                utterance.pitch = 1;
+                utterance.volume = 1;
+
+                utterance.onstart = () => {
+                    document.getElementById('audioStatus').textContent = '재생 중...';
+                    document.getElementById('playButton').innerHTML = '<i class="fas fa-pause text-2xl"></i>';
+                };
+
+                utterance.onend = () => {
+                    document.getElementById('audioStatus').textContent = '재생 완료';
+                    document.getElementById('playButton').innerHTML = '<i class="fas fa-play text-2xl"></i>';
+                    
+                    // 재생 횟수 증가
+                    incrementCurrentQuestionPlayCount();
+                    playCount = getCurrentQuestionPlayCount();
+                    document.getElementById('playCount').textContent = playCount;
+                };
+
+                utterance.onerror = (event) => {
+                    console.error('음성 재생 오류:', event.error);
+                    document.getElementById('audioStatus').textContent = '재생 오류';
+                    document.getElementById('playButton').innerHTML = '<i class="fas fa-play text-2xl"></i>';
+                };
+
+                window.speechSynthesis.speak(utterance);
+                currentUtterance = utterance;
+            } else {
+                alert('이 브라우저는 음성 기능을 지원하지 않습니다.');
+            }
+        }
+
+        // 음성 속도 설정
+        function setSpeechRate(rate) {
+            currentSpeechRate = rate;
+            
+            // 버튼 스타일 업데이트
+            document.querySelectorAll('#speedSlowBtn, #speedNormalBtn, #speedFastBtn').forEach(btn => {
+                btn.classList.remove('border-b', 'border-white/50');
+                btn.classList.add('text-white/70');
+            });
+            
+            if (rate === 0.8) {
+                document.getElementById('speedSlowBtn').classList.add('border-b', 'border-white/50');
+                document.getElementById('speedSlowBtn').classList.remove('text-white/70');
+            } else if (rate === 1.0) {
+                document.getElementById('speedNormalBtn').classList.add('border-b', 'border-white/50');
+                document.getElementById('speedNormalBtn').classList.remove('text-white/70');
+            } else if (rate === 1.2) {
+                document.getElementById('speedFastBtn').classList.add('border-b', 'border-white/50');
+                document.getElementById('speedFastBtn').classList.remove('text-white/70');
+            }
+        }
+
+        // 오디오 테스트
+        function testAudio() {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance('오디오 테스트입니다.');
+                utterance.lang = 'ko-KR';
+                utterance.rate = 1;
+                utterance.pitch = 1;
+                utterance.volume = 1;
+
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert('이 브라우저는 음성 기능을 지원하지 않습니다.');
+            }
+        }
+
+        // 답안 제출
+        async function submitAnswer() {
+            const answerInput = document.getElementById('answerInput');
+            const userAnswer = answerInput.value.trim();
+            
+            if (!userAnswer) {
+                alert('답안을 입력해주세요.');
+                return;
+            }
+
+            // 답안 저장
+            answers[currentQuestionIndex] = userAnswer;
+            
+            // 서버에 저장
+            await saveProgressImmediate();
+            
+            // 다음 문제로 이동 또는 완료
+            if (currentQuestionIndex < testData.sentences.length - 1) {
+                nextQuestion();
+            } else {
+                // 모든 문제 완료
+                await submitTest(false);
+            }
+        }
+
+        // 다음 문제
+        function nextQuestion() {
+            if (currentQuestionIndex < testData.sentences.length - 1) {
+                loadQuestion(currentQuestionIndex + 1);
+                updateProgress();
+            }
+        }
+
+        // 이전 문제
+        function prevQuestion() {
+            if (currentQuestionIndex > 0) {
+                loadQuestion(currentQuestionIndex - 1);
+                updateProgress();
+            }
+        }        // 테스트 제출
+        async function submitTest(isTimeUp = false) {
+            try {
+                console.log('테스트 제출 시작...');
+                
+                const endTime = new Date();
+                const elapsedTime = testStartTime ? endTime.getTime() - testStartTime.getTime() : 0;
+                const durationMinutes = Math.round(elapsedTime / 60000);
+                
+                // 점수 계산 및 상세 답안 생성
+                let totalScore = 0;
+                let correctCount = 0;
+                const detailedAnswers = [];
+                const results = [];
+                
+                for (let i = 0; i < testData.sentences.length; i++) {
+                    const originalText = testData.sentences[i].text;
+                    const userAnswer = answers[i] || '';
+                    const scoreResult = calculateScoreDetailed(originalText, userAnswer);
+                    const score = scoreResult.score;
+                    const isCorrect = score >= 80; // 80점 이상을 정답으로 간주
+                    
+                    totalScore += score;
+                    if (isCorrect) correctCount++;
+                    
+                    // 상세 답안 정보 (result.html에서 사용)
+                    detailedAnswers.push({
+                        questionIndex: i,
+                        userAnswer: userAnswer,
+                        isCorrect: isCorrect,
+                        score: score,
+                        feedback: scoreResult.feedback,
+                        submittedAt: endTime,
+                        playCount: playCountStorage[`q_${i}`] || 0
+                    });
+                    
+                    // 기존 호환성을 위한 results (옵션)
+                    results.push({
+                        question: i + 1,
+                        original: originalText,
+                        answer: userAnswer,
+                        score: score,
+                        isCorrect: isCorrect
+                    });
+                }
+                
+                const finalScore = Math.round(totalScore / testData.sentences.length);
+                
+                // 서버에 최종 결과 저장
+                const finalData = {
+                    [`participants.${studentSession.participantId}.status`]: 'completed',
+                    [`participants.${studentSession.participantId}.answers`]: detailedAnswers,
+                    [`participants.${studentSession.participantId}.completedAt`]: firebase.firestore.FieldValue.serverTimestamp(),
+                    [`participants.${studentSession.participantId}.elapsedTime`]: elapsedTime,
+                    [`participants.${studentSession.participantId}.duration`]: durationMinutes,
+                    [`participants.${studentSession.participantId}.finalScore`]: finalScore,
+                    [`participants.${studentSession.participantId}.correctAnswers`]: correctCount,
+                    [`participants.${studentSession.participantId}.results`]: results,
+                    [`participants.${studentSession.participantId}.isTimeUp`]: isTimeUp,
+                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                console.log('저장할 데이터:', finalData);
+                
+                await db.collection('tests').doc(studentSession.testCode).update(finalData);
+                
+                console.log('테스트 제출 완료');
+                
+                // 완료 화면 표시
+                showCompletionScreen(finalScore, results, elapsedTime);
+                
+            } catch (error) {
+                console.error('테스트 제출 오류:', error);
+                alert('테스트 제출 중 오류가 발생했습니다.');
+            }
+        }        // 점수 계산 (상세 정보 포함)
+        function calculateScoreDetailed(original, answer) {
+            if (!answer) {
+                return {
+                    score: 0,
+                    feedback: "답안이 입력되지 않았습니다."
+                };
+            }
+            
+            // 기존 ScoringEngine 사용
+            if (typeof ScoringEngine !== 'undefined') {
+                try {
+                    const scoringEngine = new ScoringEngine({
+                        caseSensitive: false,
+                        strictPunctuation: false,
+                        allowPartialCredit: true
+                    });
+                    
+                    const result = scoringEngine.score(answer, original);
+                    return {
+                        score: Math.round(result.score || 0),
+                        feedback: result.feedback || "채점 완료"
+                    };
+                } catch (error) {
+                    console.error('ScoringEngine 오류:', error);
+                    // 폴백으로 간단한 채점 사용
+                }
+            }
+            
+            // 폴백: 간단한 채점 (ScoringEngine이 없거나 오류인 경우)
+            const originalWords = original.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/);
+            const answerWords = answer.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/);
+            
+            let correctWords = 0;
+            for (let i = 0; i < Math.min(originalWords.length, answerWords.length); i++) {
+                if (originalWords[i] === answerWords[i]) {
+                    correctWords++;
+                }
+            }
+            
+            const score = Math.round((correctWords / originalWords.length) * 100);
+            let feedback = "";
+            
+            if (score === 100) feedback = "완벽합니다!";
+            else if (score >= 80) feedback = "잘했어요!";
+            else if (score >= 60) feedback = "조금 더 노력해보세요.";
+            else feedback = "다시 시도해보세요.";
+            
+            return { score, feedback };
+        }
+        
+        // 점수 계산 (기존 호환성용)
+        function calculateScore(original, answer) {
+            const result = calculateScoreDetailed(original, answer);
+            return result.score;
+        }
+
+        // 완료 화면 표시
+        function showCompletionScreen(score = 0, results = [], elapsedTime = 0) {
+            // 화면 전환
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('testScreen').classList.add('hidden');
+            document.getElementById('completionScreen').classList.remove('hidden');
+            
+            // 결과 표시
+            document.getElementById('finalScore').textContent = score + '%';
+            document.getElementById('correctAnswers').textContent = results.filter(r => r.score >= 80).length;
+            document.getElementById('testDuration').textContent = Math.round(elapsedTime / 60000) + '분';
+            
+            // 타이머 정지
+            if (testTimer) {
+                clearInterval(testTimer);
+            }
+        }
+
+        // 키보드 단축키 처리
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && event.ctrlKey) {
+                // Ctrl + Enter: 답안 제출
+                const submitBtn = document.getElementById('submitAnswerBtn');
+                if (submitBtn && !submitBtn.disabled) {
+                    submitAnswer();
+                }
+            } else if (event.key === ' ' && event.ctrlKey) {
+                // Ctrl + Space: 음성 재생
+                event.preventDefault();
+                playCurrentSentence();
+            }
+        }
+
+        // 하트비트 (활성 상태 업데이트)
+        function startHeartbeat() {
+            setInterval(async () => {
+                if (testStartTime && participantData?.status === 'in-progress') {
+                    await updateLastActiveTime();
+                }
+            }, 30000); // 30초마다
+        }
+
+        // 마지막 활성 시간 업데이트
+        async function updateLastActiveTime() {
+            try {
+                await db.collection('tests').doc(studentSession.testCode).update({
+                    [`participants.${studentSession.participantId}.lastActiveAt`]: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (error) {
+                console.error('활성 시간 업데이트 오류:', error);
+            }
+        }
+
+        // 테스트 재시도
+        function retryTest() {
+            if (confirm('테스트를 다시 시작하시겠습니까? 기존 답안이 모두 삭제됩니다.')) {
+                // 데이터 초기화
+                answers = [];
+                currentQuestionIndex = 0;
+                testStartTime = null;
+                playCountStorage = {};
+                
+                // UI 초기화
+                document.getElementById('completionScreen').classList.add('hidden');
+                document.getElementById('startScreen').classList.remove('hidden');
+                
+                // 재시도 플래그 설정
+                participantData.status = 'pending';
+                
+                console.log('테스트 재시도 준비 완료');
+            }
+        }
+    </script>
+</body>
+</html>

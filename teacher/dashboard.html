@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>교사 대시보드 - English Dictation</title>
+    
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/teacher.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 헤더 -->
+    <header class="bg-white shadow-lg border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-2xl font-bold text-gray-900">
+                        📝 English Dictation
+                    </h1>
+                    <span class="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">교사</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-600" id="teacherName">-</span>
+                    <button 
+                        onclick="logout()"
+                        class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors text-sm"
+                    >
+                        로그아웃
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- 대시보드 헤더 -->
+        <div class="mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h2 class="text-3xl font-bold text-gray-900">대시보드</h2>
+                    <p class="text-gray-600 mt-1">테스트를 생성하고 학생들의 진행 상황을 관리하세요</p>
+                </div>
+                <button 
+                    onclick="createNewTest()"
+                    class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold flex items-center space-x-2"
+                >
+                    <span>➕</span>
+                    <span>새 테스트 생성</span>
+                </button>
+            </div>
+        </div>        <!-- 통계 카드 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <div class="flex items-center">
+                    <div class="p-3 bg-blue-100 rounded-lg">
+                        <span class="text-2xl">📝</span>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-600">총 테스트</p>
+                        <p class="text-2xl font-bold text-gray-900" id="totalTests">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <div class="flex items-center">
+                    <div class="p-3 bg-green-100 rounded-lg">
+                        <span class="text-2xl">✅</span>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-600">활성 테스트</p>
+                        <p class="text-2xl font-bold text-gray-900" id="activeTests">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 테스트 목록 -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-900">테스트 목록</h3>
+                    <div class="flex space-x-2">
+                        <select id="filterStatus" class="px-3 py-1 border border-gray-300 rounded-md text-sm">
+                            <option value="all">전체</option>
+                            <option value="active">활성</option>
+                            <option value="inactive">비활성</option>
+                        </select>
+                        <button onclick="refreshTests()" class="text-gray-400 hover:text-gray-600">
+                            🔄
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                테스트 정보
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                코드
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                상태
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                참여자
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                생성일
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                작업
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="testsTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- 테스트 목록이 여기에 동적으로 추가됩니다 -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 빈 상태 -->
+            <div id="emptyState" class="hidden text-center py-12">
+                <div class="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <span class="text-4xl text-gray-400">📝</span>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">아직 생성된 테스트가 없습니다</h3>
+                <p class="text-gray-500 mb-6">첫 번째 받아쓰기 테스트를 생성해보세요!</p>
+                <button 
+                    onclick="createNewTest()"
+                    class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                    테스트 생성하기
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- 로딩 스피너 -->
+    <div id="loadingSpinner" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span>로딩 중...</span>
+        </div>
+    </div>    <!-- JavaScript -->
+    <script src="../js/firebase-config.js?v=4"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/test-code.js"></script>
+    <script src="../js/teacher.js"></script>
+    
+    <script>
+        let currentUser = null;
+        let userTests = [];
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDashboard();
+        });
+
+        // 대시보드 초기화
+        async function initializeDashboard() {
+            // 인증 상태 확인
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    currentUser = user;
+                    await loadUserInfo();
+                    await loadTests();
+                    updateStatistics();
+                } else {
+                    window.location.href = '../index.html';
+                }
+            });
+
+            // 필터 이벤트 리스너
+            document.getElementById('filterStatus').addEventListener('change', filterTests);
+        }        // 사용자 정보 로드
+        async function loadUserInfo() {
+            try {
+                console.log('사용자 정보 로드 시작:', currentUser.uid, currentUser.displayName);
+                
+                // 사용자 문서 확인 및 생성 (ensureUserDocument 호출)
+                await ensureUserDocument(currentUser.uid, currentUser.email, currentUser.displayName || '선생님');
+                
+                // 업데이트된 사용자 문서 다시 로드
+                const userDoc = await db.collection('users').doc(currentUser.uid).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    const displayName = userData.displayName || currentUser.displayName || currentUser.email || '선생님';
+                    document.getElementById('teacherName').textContent = displayName;
+                    console.log('사용자 displayName 설정 완료:', displayName);
+                } else {
+                    console.warn('사용자 문서가 여전히 존재하지 않음');
+                    document.getElementById('teacherName').textContent = currentUser.displayName || currentUser.email || '선생님';
+                }
+            } catch (error) {
+                console.error('사용자 정보 로드 오류:', error);
+                // 오류가 발생해도 기본값 설정
+                document.getElementById('teacherName').textContent = currentUser.displayName || currentUser.email || '선생님';
+            }
+        }
+
+        // 테스트 목록 로드
+        async function loadTests() {
+            showLoading();
+            try {
+                const userDoc = await db.collection('users').doc(currentUser.uid).get();
+                if (!userDoc.exists) {
+                    userTests = [];
+                    renderTests();
+                    return;
+                }
+
+                const userData = userDoc.data();
+                const testCodes = userData.testCodes || [];
+
+                if (testCodes.length === 0) {
+                    userTests = [];
+                    renderTests();
+                    return;
+                }
+
+                // 각 테스트 코드에 대한 상세 정보 가져오기
+                const testPromises = testCodes.map(async (code) => {
+                    const testDoc = await db.collection('tests').doc(code).get();
+                    if (testDoc.exists) {
+                        return { id: code, ...testDoc.data() };
+                    }
+                    return null;
+                });
+
+                const tests = await Promise.all(testPromises);
+                userTests = tests.filter(test => test !== null);
+                
+                renderTests();
+            } catch (error) {
+                console.error('테스트 로드 오류:', error);
+                showToast('테스트 목록을 불러오는 중 오류가 발생했습니다.', 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // 테스트 목록 렌더링
+        function renderTests() {
+            const tbody = document.getElementById('testsTableBody');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (userTests.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            
+            const html = userTests.map(test => {
+                const participantCount = Object.keys(test.participants || {}).length;
+                const statusBadge = test.isActive 
+                    ? '<span class="badge badge-success">활성</span>'
+                    : '<span class="badge badge-error">비활성</span>';
+                
+                const createdDate = test.createdAt 
+                    ? new Date(test.createdAt.toDate()).toLocaleDateString()
+                    : '-';
+
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4">
+                            <div>
+                                <div class="text-sm font-medium text-gray-900">${test.title}</div>
+                                <div class="text-sm text-gray-500">${test.sentences?.length || 0}개 문장</div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm font-mono font-bold text-blue-600">${test.testCode}</span>
+                                <button onclick="copyTestCode('${test.testCode}')" class="text-gray-400 hover:text-blue-600" title="코드 복사">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/>
+                                        <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            ${statusBadge}
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-900">${participantCount}명</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-900">${createdDate}</div>
+                        </td>                        <td class="px-6 py-4">
+                            <div class="flex space-x-2">
+                                <button onclick="monitorTest('${test.testCode}')" class="text-blue-600 hover:text-blue-800 text-sm">
+                                    모니터링
+                                </button>
+                                <button onclick="editTest('${test.testCode}')" class="text-green-600 hover:text-green-800 text-sm">
+                                    수정
+                                </button>
+                                <button onclick="toggleTestStatus('${test.testCode}', ${test.isActive})" class="text-yellow-600 hover:text-yellow-800 text-sm">
+                                    ${test.isActive ? '비활성화' : '활성화'}
+                                </button>
+                                <button onclick="deleteTest('${test.testCode}', '${test.title}')" class="text-red-600 hover:text-red-800 text-sm">
+                                    삭제
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            tbody.innerHTML = html;
+        }        // 통계 업데이트
+        function updateStatistics() {
+            const totalTests = userTests.length;
+            const activeTests = userTests.filter(test => test.isActive).length;
+
+            document.getElementById('totalTests').textContent = totalTests;
+            document.getElementById('activeTests').textContent = activeTests;
+        }
+
+        // 테스트 필터링
+        function filterTests() {
+            const filter = document.getElementById('filterStatus').value;
+            let filteredTests = userTests;
+
+            if (filter === 'active') {
+                filteredTests = userTests.filter(test => test.isActive);
+            } else if (filter === 'inactive') {
+                filteredTests = userTests.filter(test => !test.isActive);
+            }
+
+            // 임시로 userTests를 변경하여 렌더링
+            const originalTests = [...userTests];
+            userTests = filteredTests;
+            renderTests();
+            userTests = originalTests;
+        }
+
+        // 새 테스트 생성
+        function createNewTest() {
+            window.location.href = 'create-test.html';
+        }        // 테스트 모니터링
+        function monitorTest(testCode) {
+            console.log('모니터링 페이지로 이동:', testCode);
+            
+            // 현재 인증 상태를 localStorage에 저장
+            const currentUser = firebase.auth().currentUser;
+            if (currentUser) {
+                localStorage.setItem('authState', JSON.stringify({
+                    authenticated: true,
+                    userEmail: currentUser.email,
+                    userName: currentUser.displayName,
+                    timestamp: Date.now()
+                }));
+                console.log('인증 상태 localStorage에 저장');
+            }
+            
+            // 모니터링 페이지로 이동
+            window.location.href = `monitor.html?code=${testCode}`;
+        }
+
+        // 테스트 수정
+        function editTest(testCode) {
+            window.location.href = `edit-test.html?code=${testCode}`;
+        }        // 테스트 상태 토글
+        async function toggleTestStatus(testCode, currentStatus) {
+            if (!confirm(`테스트를 ${currentStatus ? '비활성화' : '활성화'}하시겠습니까?`)) {
+                return;
+            }
+
+            showLoading();
+            try {
+                await db.collection('tests').doc(testCode).update({
+                    isActive: !currentStatus
+                });
+
+                showToast(`테스트가 ${!currentStatus ? '활성화' : '비활성화'}되었습니다.`, 'success');
+                await loadTests();
+                updateStatistics();
+            } catch (error) {
+                console.error('테스트 상태 변경 오류:', error);
+                showToast('테스트 상태 변경 중 오류가 발생했습니다.', 'error');
+            } finally {
+                hideLoading();
+            }
+        }        // 테스트 삭제
+        async function deleteTest(testCode, testTitle) {
+            // 이중 확인
+            if (!confirm(`정말로 테스트 "${testTitle}"를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없으며, 다음 데이터가 모두 삭제됩니다:\n- 테스트 정보\n- 참여자 데이터\n- 답안 기록\n\n계속하시겠습니까?`)) {
+                return;
+            }
+
+            // 최종 확인
+            if (!confirm(`최종 확인: "${testTitle}" 테스트를 완전히 삭제합니다.`)) {
+                return;
+            }
+
+            showLoading();
+            try {
+                // Firestore에서 테스트 문서 삭제
+                await db.collection('tests').doc(testCode).delete();
+
+                // 현재 사용자의 testCodes 배열에서 해당 테스트 코드 제거
+                if (currentUser) {
+                    const userRef = db.collection('users').doc(currentUser.uid);
+                    await userRef.update({
+                        testCodes: firebase.firestore.FieldValue.arrayRemove(testCode)
+                    });
+                }
+
+                showToast(`테스트 "${testTitle}"가 성공적으로 삭제되었습니다.`, 'success');
+                
+                // 테스트 목록 새로고침
+                await loadTests();
+                updateStatistics();
+            } catch (error) {
+                console.error('테스트 삭제 오류:', error);
+                showToast('테스트 삭제 중 오류가 발생했습니다.', 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // 테스트 새로고침
+        async function refreshTests() {
+            await loadTests();
+            updateStatistics();
+            showToast('테스트 목록이 새로고침되었습니다.', 'info');
+        }
+
+        // 테스트 코드 복사
+        function copyTestCode(testCode) {
+            navigator.clipboard.writeText(testCode).then(() => {
+                showToast(`테스트 코드 ${testCode}가 클립보드에 복사되었습니다!`, 'success');
+            }).catch(() => {
+                // 폴백: 텍스트 선택
+                showToast(`테스트 코드: ${testCode}`, 'info');
+            });
+        }
+
+        // 유틸리티 함수들
+        function showLoading() {
+            document.getElementById('loadingSpinner').classList.remove('hidden');
+            document.getElementById('loadingSpinner').classList.add('flex');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingSpinner').classList.add('hidden');
+            document.getElementById('loadingSpinner').classList.remove('flex');
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+    </script>    <!-- JavaScript 파일들 -->
+    <script src="../js/firebase-config.js?v=4"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/teacher.js"></script>
+</body>
+</html>

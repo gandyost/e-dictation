@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>새 테스트 생성 - English Dictation</title>
+    
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    
+    <!-- SortableJS for drag & drop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/teacher.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 헤더 -->
+    <header class="bg-white shadow-lg border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-4">
+                    <button onclick="goBack()" class="text-gray-600 hover:text-gray-800">
+                        ← 돌아가기
+                    </button>
+                    <h1 class="text-2xl font-bold text-gray-900">새 테스트 생성</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-600" id="teacherName">-</span>
+                    <button 
+                        onclick="logout()"
+                        class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors text-sm"
+                    >
+                        로그아웃
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form id="createTestForm" class="space-y-8">
+            <!-- 기본 정보 -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-6">기본 정보</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="form-label">테스트 제목 <span class="text-red-500">*</span></label>
+                        <input 
+                            type="text" 
+                            id="testTitle"
+                            class="form-input"
+                            placeholder="예: 중간고사 영어 받아쓰기"
+                            required
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">설명 (선택사항)</label>
+                        <textarea 
+                            id="testDescription"
+                            class="form-input form-textarea"
+                            placeholder="테스트에 대한 간단한 설명을 입력하세요"
+                        ></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 테스트 설정 -->
+            <div class="settings-panel">
+                <h2 class="text-xl font-semibold text-gray-900 mb-6">테스트 설정</h2>
+                
+                <div class="settings-grid">
+                    <div>
+                        <label class="form-label">시간 제한</label>
+                        <select id="timeLimit" class="form-input">
+                            <option value="">제한 없음</option>
+                            <option value="300">5분</option>
+                            <option value="600">10분</option>
+                            <option value="900">15분</option>
+                            <option value="1200">20분</option>
+                            <option value="1800">30분</option>
+                            <option value="custom">직접 입력</option>
+                        </select>
+                        <input 
+                            type="number" 
+                            id="customTimeLimit"
+                            class="form-input mt-2 hidden"
+                            placeholder="분 단위로 입력"
+                            min="1"
+                            max="180"
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">재시도 허용</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="allowRetry" class="custom-checkbox">
+                            <span class="text-sm text-gray-600">학생이 테스트를 다시 볼 수 있도록 허용</span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">결과 즉시 공개</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="showResultsImmediately" class="custom-checkbox" checked>
+                            <span class="text-sm text-gray-600">테스트 완료 후 즉시 결과 표시</span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">음성 속도</label>
+                        <select id="speechRate" class="form-input">
+                            <option value="0.8">느림 (0.8x)</option>
+                            <option value="1.0" selected>보통 (1.0x)</option>
+                            <option value="1.2">빠름 (1.2x)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 채점 옵션 -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-6">채점 옵션</h2>
+                
+                <div class="settings-grid">
+                    <div>
+                        <label class="form-label">대소문자 구분</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="caseSensitive" class="custom-checkbox">
+                            <span class="text-sm text-gray-600">대소문자를 구분하여 채점</span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">구두점 체크</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="checkPunctuation" class="custom-checkbox" checked>
+                            <span class="text-sm text-gray-600">마침표, 쉼표 등 구두점 확인</span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">여백 무시</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="ignoreSpaces" class="custom-checkbox">
+                            <span class="text-sm text-gray-600">단어 사이 여백 개수 무시</span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">부분 점수</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="partialCredit" class="custom-checkbox" checked>
+                            <span class="text-sm text-gray-600">단어별 부분 점수 부여</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 문장 관리 -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-semibold text-gray-900">문장 관리</h2>
+                    <div class="flex space-x-2">
+                        <button 
+                            type="button"
+                            onclick="addSentence()"
+                            class="btn-primary"
+                        >
+                            ➕ 문장 추가
+                        </button>
+                        <button 
+                            type="button"
+                            onclick="importSentences()"
+                            class="btn-secondary"
+                        >
+                            📁 파일에서 가져오기
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <p class="text-sm text-gray-600 mb-2">
+                        <span class="font-medium">총 <span id="sentenceCount">0</span>개 문장</span>
+                        • 드래그하여 순서 변경 가능
+                    </p>
+                </div>
+
+                <!-- 문장 목록 -->
+                <div id="sentencesList" class="space-y-4">
+                    <!-- 문장들이 여기에 동적으로 추가됩니다 -->
+                </div>
+
+                <!-- 빈 상태 -->
+                <div id="emptySentencesState" class="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+                    <div class="text-4xl text-gray-400 mb-4">📝</div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">아직 추가된 문장이 없습니다</h3>
+                    <p class="text-gray-500 mb-4">첫 번째 문장을 추가해보세요!</p>
+                    <button 
+                        type="button"
+                        onclick="addSentence()"
+                        class="btn-primary"
+                    >
+                        문장 추가하기
+                    </button>
+                </div>
+            </div>
+
+            <!-- 미리보기 -->
+            <div class="bg-blue-50 rounded-xl border border-blue-200 p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">미리보기</h2>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="font-medium text-gray-900 mb-2">테스트 정보</h3>                        <div class="bg-white rounded-lg p-4 text-sm">
+                            <p><strong>제목:</strong> <span id="previewTitle">-</span></p>
+                            <p><strong>문장 수:</strong> <span id="previewSentenceCount">0</span>개</p>
+                            <p><strong>시간 제한:</strong> <span id="previewTimeLimit">제한 없음</span> <span id="previewTimeLimitInfo" class="text-gray-500 text-xs hidden"></span></p>
+                            <p><strong>재시도:</strong> <span id="previewAllowRetry">불허용</span></p>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="font-medium text-gray-900 mb-2">테스트 코드</h3>
+                        <div class="bg-white rounded-lg p-4 text-center">
+                            <p class="text-sm text-gray-600 mb-2">생성될 테스트 코드</p>
+                            <p class="text-2xl font-mono font-bold text-blue-600" id="previewTestCode">생성 중...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 제출 버튼 -->
+            <div class="flex justify-end space-x-4">
+                <button 
+                    type="button"
+                    onclick="goBack()"
+                    class="px-6 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                    취소
+                </button>
+                <button 
+                    type="submit"
+                    class="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                >
+                    테스트 생성
+                </button>
+            </div>
+        </form>
+    </main>
+
+    <!-- 문장 가져오기 모달 -->
+    <div id="importModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">문장 가져오기</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="form-label">텍스트 파일 선택</label>
+                    <input 
+                        type="file" 
+                        id="sentenceFile"
+                        accept=".txt"
+                        class="form-input"
+                    >
+                    <p class="text-xs text-gray-500 mt-1">
+                        .txt 파일, 한 줄에 하나씩 문장 작성
+                    </p>
+                </div>
+                <div>
+                    <label class="form-label">또는 직접 입력</label>
+                    <textarea 
+                        id="bulkSentences"
+                        class="form-input form-textarea"
+                        placeholder="한 줄에 하나씩 문장을 입력하세요&#10;예:&#10;Hello, how are you?&#10;I am fine, thank you."
+                    ></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="closeImportModal()" class="btn-secondary">취소</button>
+                <button onclick="processSentenceImport()" class="btn-primary">가져오기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 로딩 스피너 -->
+    <div id="loadingSpinner" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span>테스트 생성 중...</span>
+        </div>
+    </div>
+
+    <!-- 테스트 생성 성공 모달 -->
+    <div id="successModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-8 max-w-lg w-full mx-4">
+            <div class="text-center">
+                <div class="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                    <span class="text-3xl">✅</span>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-900 mb-2">테스트 생성 완료!</h3>
+                <p class="text-gray-600 mb-6">새로운 받아쓰기 테스트가 성공적으로 생성되었습니다.</p>
+                
+                <div class="bg-blue-50 rounded-lg p-6 mb-6">
+                    <p class="text-sm text-gray-600 mb-2">테스트 제목</p>
+                    <p class="font-semibold text-gray-900 mb-4" id="modalTestTitle">-</p>
+                    
+                    <p class="text-sm text-gray-600 mb-2">테스트 코드</p>
+                    <div class="flex items-center justify-center space-x-2">
+                        <span class="text-3xl font-mono font-bold text-blue-600" id="modalTestCode">ABC123</span>
+                        <button onclick="copyTestCode()" class="text-blue-600 hover:text-blue-800" title="코드 복사">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/>
+                                <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">학생들이 이 코드로 테스트에 참여할 수 있습니다</p>
+                </div>
+                
+                <div class="space-y-3">
+                    <button onclick="goToMonitoring()" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                        실시간 모니터링으로 이동
+                    </button>
+                    <button onclick="goToDashboard()" class="w-full bg-gray-200 text-gray-800 py-3 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        대시보드로 돌아가기
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>    <!-- JavaScript -->
+    <script src="../js/firebase-config.js?v=4"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/test-code.js"></script>
+    <script src="../js/teacher.js"></script>
+    
+    <script>
+        let currentUser = null;
+        let sentences = [];
+        let sentenceCounter = 0;
+        let sortableInstance = null;
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCreateTest();
+        });
+
+        // 생성 페이지 초기화
+        function initializeCreateTest() {
+            // 인증 상태 확인
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    currentUser = user;
+                    await loadUserInfo();
+                    setupEventListeners();
+                    updatePreview();
+                } else {
+                    window.location.href = '../index.html';
+                }
+            });
+        }        // 사용자 정보 로드
+        async function loadUserInfo() {
+            try {
+                console.log('사용자 정보 로드 시작:', currentUser.uid, currentUser.displayName);
+                
+                // 사용자 문서 확인 및 생성 (ensureUserDocument 호출)
+                await ensureUserDocument(currentUser.uid, currentUser.email, currentUser.displayName || '선생님');
+                
+                // 업데이트된 사용자 문서 다시 로드
+                const userDoc = await db.collection('users').doc(currentUser.uid).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    const displayName = userData.displayName || currentUser.displayName || currentUser.email || '선생님';
+                    document.getElementById('teacherName').textContent = displayName;
+                    console.log('사용자 displayName 설정 완료:', displayName);
+                } else {
+                    console.warn('사용자 문서가 여전히 존재하지 않음');
+                    document.getElementById('teacherName').textContent = currentUser.displayName || currentUser.email || '선생님';
+                }
+            } catch (error) {
+                console.error('사용자 정보 로드 오류:', error);
+                // 오류가 발생해도 기본값 설정
+                document.getElementById('teacherName').textContent = currentUser.displayName || currentUser.email || '선생님';
+            }
+        }
+
+        // 이벤트 리스너 설정
+        function setupEventListeners() {
+            // 폼 제출
+            document.getElementById('createTestForm').addEventListener('submit', handleFormSubmit);
+
+            // 실시간 미리보기 업데이트
+            document.getElementById('testTitle').addEventListener('input', updatePreview);
+            document.getElementById('timeLimit').addEventListener('change', handleTimeLimitChange);
+            document.getElementById('customTimeLimit').addEventListener('input', updatePreview);
+            document.getElementById('allowRetry').addEventListener('change', updatePreview);
+            document.getElementById('showResultsImmediately').addEventListener('change', updatePreview);
+
+            // Sortable 초기화
+            initializeSortable();
+        }
+
+        // 시간 제한 변경 처리
+        function handleTimeLimitChange() {
+            const timeLimit = document.getElementById('timeLimit').value;
+            const customInput = document.getElementById('customTimeLimit');
+            
+            if (timeLimit === 'custom') {
+                customInput.classList.remove('hidden');
+                customInput.focus();
+            } else {
+                customInput.classList.add('hidden');
+                customInput.value = '';
+            }
+            updatePreview();
+        }
+
+        // 문장 추가
+        function addSentence(text = '', difficulty = 'medium', category = 'general') {
+            sentenceCounter++;
+            const sentence = {
+                id: `sentence_${sentenceCounter}`,
+                text: text,
+                order: sentences.length + 1,
+                difficulty: difficulty,
+                category: category
+            };
+
+            sentences.push(sentence);
+            renderSentences();
+            updatePreview();
+        }
+
+        // 문장 목록 렌더링
+        function renderSentences() {
+            const container = document.getElementById('sentencesList');
+            const emptyState = document.getElementById('emptySentencesState');
+
+            if (sentences.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            const html = sentences.map((sentence, index) => `
+                <div class="sentence-item" data-id="${sentence.id}">
+                    <div class="flex items-start space-x-3">
+                        <div class="drag-handle">⋮⋮</div>
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-2">
+                                <span class="text-sm font-medium text-gray-600">#${index + 1}</span>
+                                <select 
+                                    onchange="updateSentenceDifficulty('${sentence.id}', this.value)"
+                                    class="text-xs border border-gray-300 rounded px-2 py-1"
+                                >
+                                    <option value="easy" ${sentence.difficulty === 'easy' ? 'selected' : ''}>쉬움</option>
+                                    <option value="medium" ${sentence.difficulty === 'medium' ? 'selected' : ''}>보통</option>
+                                    <option value="hard" ${sentence.difficulty === 'hard' ? 'selected' : ''}>어려움</option>
+                                </select>
+                                <input 
+                                    type="text" 
+                                    value="${sentence.category}"
+                                    onchange="updateSentenceCategory('${sentence.id}', this.value)"
+                                    placeholder="카테고리"
+                                    class="text-xs border border-gray-300 rounded px-2 py-1 w-20"
+                                >
+                            </div>
+                            <textarea 
+                                onchange="updateSentenceText('${sentence.id}', this.value)"
+                                class="w-full p-3 border border-gray-300 rounded-lg resize-none"
+                                rows="2"
+                                placeholder="영어 문장을 입력하세요"
+                                required
+                            >${sentence.text}</textarea>
+                            <div class="sentence-controls">
+                                <button 
+                                    type="button"
+                                    onclick="testSentenceSpeech('${sentence.id}')"
+                                    class="text-blue-600 hover:text-blue-800 text-sm flex items-center space-x-1"
+                                    title="이 문장을 음성으로 들어보기"
+                                >
+                                    <span>🔊</span>
+                                    <span>음성 테스트</span>
+                                </button>
+                                <button 
+                                    type="button"
+                                    onclick="removeSentence('${sentence.id}')"
+                                    class="text-red-600 hover:text-red-800 text-sm"
+                                >
+                                    삭제
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = html;
+            updateSentenceCount();
+        }
+
+        // 문장 수 업데이트
+        function updateSentenceCount() {
+            document.getElementById('sentenceCount').textContent = sentences.length;
+        }
+
+        // 문장 텍스트 업데이트
+        function updateSentenceText(id, text) {
+            const sentence = sentences.find(s => s.id === id);
+            if (sentence) {
+                sentence.text = text;
+                updatePreview();
+            }
+        }
+
+        // 문장 난이도 업데이트
+        function updateSentenceDifficulty(id, difficulty) {
+            const sentence = sentences.find(s => s.id === id);
+            if (sentence) {
+                sentence.difficulty = difficulty;
+            }
+        }
+
+        // 문장 카테고리 업데이트
+        function updateSentenceCategory(id, category) {
+            const sentence = sentences.find(s => s.id === id);
+            if (sentence) {
+                sentence.category = category;
+            }
+        }
+
+        // 문장 삭제
+        function removeSentence(id) {
+            if (!confirm('이 문장을 삭제하시겠습니까?')) {
+                return;
+            }
+
+            sentences = sentences.filter(s => s.id !== id);
+            
+            // 순서 재정렬
+            sentences.forEach((sentence, index) => {
+                sentence.order = index + 1;
+            });
+
+            renderSentences();
+            updatePreview();
+        }
+
+        // 음성 테스트
+        function testSpeech(text) {
+            console.log('음성 테스트 호출됨:', text);
+            
+            if (!text || !text.trim()) {
+                alert('먼저 문장을 입력해주세요.');
+                return;
+            }
+
+            if ('speechSynthesis' in window) {
+                // 기존 음성 중지
+                speechSynthesis.cancel();
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = parseFloat(document.getElementById('speechRate').value) || 1.0;
+                utterance.volume = 1.0;
+                
+                utterance.onstart = () => console.log('음성 재생 시작');
+                utterance.onend = () => console.log('음성 재생 완료');
+                utterance.onerror = (e) => console.error('음성 재생 오류:', e);
+                
+                speechSynthesis.speak(utterance);
+            } else {
+                alert('음성 재생을 지원하지 않는 브라우저입니다.');
+            }
+        }
+
+        // 문장별 음성 테스트 (개별 호출용)
+        function testSentenceSpeech(sentenceId) {
+            const sentence = sentences.find(s => s.id === sentenceId);
+            if (sentence && sentence.text) {
+                testSpeech(sentence.text);
+            } else {
+                alert('문장을 찾을 수 없습니다.');
+            }
+        }
+
+        // Sortable 초기화
+        function initializeSortable() {
+            const container = document.getElementById('sentencesList');
+            sortableInstance = Sortable.create(container, {
+                handle: '.drag-handle',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                onEnd: function(evt) {
+                    // 배열 순서 업데이트
+                    const movedSentence = sentences.splice(evt.oldIndex, 1)[0];
+                    sentences.splice(evt.newIndex, 0, movedSentence);
+                    
+                    // 순서 재정렬
+                    sentences.forEach((sentence, index) => {
+                        sentence.order = index + 1;
+                    });
+                    
+                    renderSentences();
+                }
+            });
+        }
+
+        // 문장 가져오기
+        function importSentences() {
+            document.getElementById('importModal').classList.remove('hidden');
+            document.getElementById('importModal').classList.add('flex');
+        }
+
+        // 가져오기 모달 닫기
+        function closeImportModal() {
+            document.getElementById('importModal').classList.add('hidden');
+            document.getElementById('importModal').classList.remove('flex');
+            document.getElementById('sentenceFile').value = '';
+            document.getElementById('bulkSentences').value = '';
+        }
+
+        // 문장 가져오기 처리
+        function processSentenceImport() {
+            const fileInput = document.getElementById('sentenceFile');
+            const textInput = document.getElementById('bulkSentences');
+
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const text = e.target.result;
+                    processBulkText(text);
+                };
+                reader.readAsText(file);
+            } else if (textInput.value.trim()) {
+                processBulkText(textInput.value);
+            } else {
+                alert('파일을 선택하거나 텍스트를 입력해주세요.');
+                return;
+            }
+
+            closeImportModal();
+        }
+
+        // 대량 텍스트 처리
+        function processBulkText(text) {
+            const lines = text.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
+
+            if (lines.length === 0) {
+                alert('유효한 문장이 없습니다.');
+                return;
+            }
+
+            lines.forEach(line => {
+                addSentence(line);
+            });
+
+            showToast(`${lines.length}개의 문장이 추가되었습니다.`, 'success');
+        }
+
+        // 미리보기 업데이트
+        function updatePreview() {            const title = document.getElementById('testTitle').value || '제목 없음';
+            const timeLimit = document.getElementById('timeLimit').value;
+            const customTimeLimit = document.getElementById('customTimeLimit').value;
+            const allowRetry = document.getElementById('allowRetry').checked;
+
+            document.getElementById('previewTitle').textContent = title;
+            document.getElementById('previewSentenceCount').textContent = sentences.length;
+            
+            // 시간 제한 표시
+            let timeLimitText = '제한 없음';
+            let timeLimitSeconds = null;
+            
+            if (timeLimit && timeLimit !== 'custom') {
+                timeLimitSeconds = parseInt(timeLimit);
+                timeLimitText = `${Math.floor(timeLimitSeconds / 60)}분`;
+            } else if (timeLimit === 'custom' && customTimeLimit) {
+                timeLimitSeconds = parseInt(customTimeLimit) * 60;
+                timeLimitText = `${customTimeLimit}분`;
+            }
+            
+            document.getElementById('previewTimeLimit').textContent = timeLimitText;
+            
+            // 시간 제한에 따른 추가 정보 표시
+            const timeLimitInfo = document.getElementById('previewTimeLimitInfo');
+            if (timeLimitSeconds) {
+                timeLimitInfo.textContent = `(${timeLimitSeconds}초, 경고: 5분전/2분전/30초전)`;
+                timeLimitInfo.classList.remove('hidden');
+            } else {
+                timeLimitInfo.classList.add('hidden');
+            }
+            if (timeLimitSeconds) {
+                timeLimitInfo.textContent = `(${timeLimitSeconds}초, 경고: 5분전/2분전/30초전)`;
+                timeLimitInfo.classList.remove('hidden');
+            } else {
+                timeLimitInfo.classList.add('hidden');
+            }
+            
+            document.getElementById('previewAllowRetry').textContent = allowRetry ? '허용' : '불허용';
+        }
+
+        // 폼 제출 처리
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+
+            // 유효성 검사
+            const title = document.getElementById('testTitle').value.trim();
+            if (!title) {
+                alert('테스트 제목을 입력해주세요.');
+                return;
+            }
+
+            if (sentences.length === 0) {
+                alert('최소 1개 이상의 문장을 추가해주세요.');
+                return;
+            }
+
+            // 모든 문장이 입력되었는지 확인
+            const emptyTexts = sentences.filter(s => !s.text.trim());
+            if (emptyTexts.length > 0) {
+                alert('모든 문장을 입력해주세요.');
+                return;
+            }
+
+            showLoading();
+
+            try {                // 테스트 데이터 준비
+                const timeLimit = document.getElementById('timeLimit').value;
+                const customTimeLimit = document.getElementById('customTimeLimit').value;
+                
+                let finalTimeLimit = null;
+                if (timeLimit && timeLimit !== 'custom') {
+                    finalTimeLimit = parseInt(timeLimit); // 이미 초 단위
+                } else if (timeLimit === 'custom' && customTimeLimit) {
+                    finalTimeLimit = parseInt(customTimeLimit) * 60; // 분을 초로 변환
+                }
+                
+                console.log('시간 제한 설정:', {
+                    selectedOption: timeLimit,
+                    customInput: customTimeLimit,
+                    finalTimeLimit: finalTimeLimit,
+                    finalTimeLimitMinutes: finalTimeLimit ? Math.ceil(finalTimeLimit / 60) : null
+                });
+
+                const settings = {
+                    description: document.getElementById('testDescription').value.trim() || '',
+                    timeLimit: finalTimeLimit,
+                    allowRetry: document.getElementById('allowRetry').checked,
+                    showResultsImmediately: document.getElementById('showResultsImmediately').checked,
+                    speechRate: parseFloat(document.getElementById('speechRate').value),
+                    scoring: {
+                        caseSensitive: document.getElementById('caseSensitive').checked,
+                        checkPunctuation: document.getElementById('checkPunctuation').checked,
+                        ignoreSpaces: document.getElementById('ignoreSpaces').checked,
+                        partialCredit: document.getElementById('partialCredit').checked
+                    }
+                };
+
+                // 테스트 생성
+                const testCode = await createNewTest(currentUser.uid, title, sentences, settings);
+
+                hideLoading();
+                
+                // 성공 메시지와 테스트 코드 표시
+                showTestCreatedModal(testCode, title);
+
+            } catch (error) {
+                console.error('테스트 생성 오류:', error);
+                showToast('테스트 생성 중 오류가 발생했습니다.', 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // 뒤로 가기
+        function goBack() {
+            if (sentences.length > 0) {
+                if (!confirm('작성 중인 내용이 있습니다. 정말 나가시겠습니까?')) {
+                    return;
+                }
+            }
+            window.location.href = 'dashboard.html';
+        }
+
+        // 유틸리티 함수들
+        let createdTestCode = '';
+        
+        function showLoading() {
+            document.getElementById('loadingSpinner').classList.remove('hidden');
+            document.getElementById('loadingSpinner').classList.add('flex');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingSpinner').classList.add('hidden');
+            document.getElementById('loadingSpinner').classList.remove('flex');
+        }
+
+        function showTestCreatedModal(testCode, testTitle) {
+            createdTestCode = testCode;
+            document.getElementById('modalTestCode').textContent = testCode;
+            document.getElementById('modalTestTitle').textContent = testTitle;
+            document.getElementById('successModal').classList.remove('hidden');
+            document.getElementById('successModal').classList.add('flex');
+        }
+
+        function copyTestCode() {
+            navigator.clipboard.writeText(createdTestCode).then(() => {
+                showToast('테스트 코드가 클립보드에 복사되었습니다!', 'success');
+            }).catch(() => {
+                // 폴백: 텍스트 선택
+                const codeElement = document.getElementById('modalTestCode');
+                const range = document.createRange();
+                range.selectNodeContents(codeElement);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                showToast('코드가 선택되었습니다. Ctrl+C로 복사하세요.', 'info');
+            });
+        }        function goToMonitoring() {
+            window.location.href = `monitor.html?code=${createdTestCode}`;
+        }
+
+        function goToDashboard() {
+            window.location.href = 'dashboard.html';
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // 샘플 문장 추가 (개발용)
+        function addSampleSentences() {
+            const samples = [
+                { text: "The quick brown fox jumps over the lazy dog.", difficulty: "easy", category: "animals" },
+                { text: "Practice makes perfect in everything you do.", difficulty: "medium", category: "daily" },
+                { text: "Knowledge is power, but enthusiasm pulls the switch.", difficulty: "hard", category: "wisdom" }
+            ];
+
+            samples.forEach(sample => {
+                addSentence(sample.text, sample.difficulty, sample.category);
+            });
+        }
+
+        // 개발용 - 콘솔에서 샘플 추가 가능
+        window.addSampleSentences = addSampleSentences;
+    </script>
+    
+    <!-- JavaScript 파일들 -->
+    <script src="../js/firebase-config.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/teacher.js"></script>
+    <script src="../js/test-code.js"></script>
+</body>
+</html>

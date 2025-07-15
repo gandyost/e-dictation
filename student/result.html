@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>테스트 결과 - 영어 받아쓰기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <style>
+        .result-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .score-circle {
+            width: 120px;
+            height: 120px;
+            position: relative;
+        }
+        .score-progress {
+            transform: rotate(-90deg);
+        }
+        .score-progress circle {
+            transition: stroke-dashoffset 0.5s ease-in-out;
+        }
+        .answer-card {
+            transition: all 0.3s ease;
+        }
+        .answer-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .correct-answer {
+            border-left: 4px solid #22c55e;
+            background-color: #f0fdf4;
+        }
+        .incorrect-answer {
+            border-left: 4px solid #ef4444;
+            background-color: #fef2f2;
+        }
+        .partial-answer {
+            border-left: 4px solid #f59e0b;
+            background-color: #fffbeb;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+        .print-hidden {
+            display: none !important;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white !important; }
+            .result-card { background: #4338ca !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 헤더 -->
+    <header class="bg-white shadow-sm border-b no-print">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-semibold text-gray-900">테스트 결과</h1>
+                    <span id="studentInfo" class="ml-4 text-sm text-gray-600"></span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="printBtn" class="btn-secondary">
+                        <i class="fas fa-print mr-2"></i>인쇄
+                    </button>
+                    <button id="shareBtn" class="btn-secondary">
+                        <i class="fas fa-share mr-2"></i>공유
+                    </button>
+                    <a href="../index.html" class="btn-primary">
+                        <i class="fas fa-home mr-2"></i>홈으로
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <!-- 로딩 스피너 -->
+        <div id="loadingSpinner" class="loading-spinner">
+            <div class="spinner"></div>
+            <p>결과를 불러오는 중...</p>
+        </div>
+
+        <!-- 결과 컨텐츠 -->
+        <div id="resultContent" class="hidden">
+            <!-- 결과 요약 카드 -->
+            <div class="result-card rounded-lg p-8 mb-8">
+                <div class="flex flex-col lg:flex-row items-center lg:items-start space-y-6 lg:space-y-0 lg:space-x-8">
+                    <!-- 점수 원형 차트 -->
+                    <div class="score-circle flex-shrink-0">
+                        <svg class="w-full h-full score-progress" viewBox="0 0 120 120">
+                            <circle cx="60" cy="60" r="54" stroke="rgba(255,255,255,0.2)" stroke-width="8" fill="none"/>
+                            <circle id="scoreCircle" cx="60" cy="60" r="54" stroke="white" stroke-width="8" fill="none"
+                                    stroke-dasharray="339.3" stroke-dashoffset="339.3"/>
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="text-center">
+                                <div id="finalScore" class="text-3xl font-bold">0%</div>
+                                <div class="text-sm opacity-90">점수</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 기본 정보 -->
+                    <div class="flex-1 text-center lg:text-left">
+                        <h2 id="testTitle" class="text-2xl font-bold mb-2">받아쓰기 테스트</h2>
+                        <p class="text-lg opacity-90 mb-2">완료되었습니다</p>
+                        <p id="completedTime" class="text-sm opacity-75 mb-4"></p>
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                            <div>
+                                <div class="font-semibold">정답</div>
+                                <div id="correctCount" class="text-lg">0</div>
+                            </div>
+                            <div>
+                                <div class="font-semibold">오답</div>
+                                <div id="incorrectCount" class="text-lg">0</div>
+                            </div>
+                            <div>
+                                <div class="font-semibold">전체</div>
+                                <div id="totalQuestions" class="text-lg">0</div>
+                            </div>
+                            <div>
+                                <div class="font-semibold">소요시간</div>
+                                <div id="testDuration" class="text-lg">0분</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 상세 통계 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- 난이도별 분석 -->
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-chart-bar text-blue-500 mr-2"></i>난이도별 분석
+                    </h3>
+                    <div id="difficultyStats" class="space-y-3">
+                        <!-- 난이도별 통계가 동적으로 생성됩니다 -->
+                    </div>
+                </div>
+
+                <!-- 점수 분포 -->
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-pie-chart text-green-500 mr-2"></i>점수 분포
+                    </h3>
+                    <div class="relative h-64">
+                        <canvas id="scoreChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 답안 목록 필터 -->
+            <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-list text-purple-500 mr-2"></i>상세 답안
+                    </h3>
+                    <div class="flex space-x-4">
+                        <div>
+                            <label for="filterType" class="text-sm font-medium text-gray-700 mr-2">필터:</label>
+                            <select id="filterType" class="border border-gray-300 rounded px-3 py-1 text-sm">
+                                <option value="all">전체</option>
+                                <option value="correct">정답</option>
+                                <option value="incorrect">오답</option>
+                                <option value="partial">부분정답</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="sortBy" class="text-sm font-medium text-gray-700 mr-2">정렬:</label>
+                            <select id="sortBy" class="border border-gray-300 rounded px-3 py-1 text-sm">
+                                <option value="order">문제 순서</option>
+                                <option value="score">점수</option>
+                                <option value="difficulty">난이도</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 답안 목록 -->
+            <div id="answersList" class="space-y-4 mb-8">
+                <!-- 답안 카드들이 동적으로 생성됩니다 -->
+            </div>
+
+            <!-- 개선 제안 -->
+            <div class="bg-white rounded-lg shadow-sm border p-6 mb-8">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>학습 제안
+                </h3>
+                <div id="suggestions" class="space-y-3">
+                    <!-- 개선 제안이 동적으로 생성됩니다 -->
+                </div>
+            </div>
+
+            <!-- 액션 버튼 -->
+            <div class="flex justify-center space-x-4 no-print">
+                <button id="retryTestBtn" class="btn-primary hidden">
+                    <i class="fas fa-redo mr-2"></i>다시 시도
+                </button>
+                <button id="downloadResultBtn" class="btn-secondary">
+                    <i class="fas fa-download mr-2"></i>결과 다운로드
+                </button>
+                <a href="../index.html" class="btn-secondary">
+                    <i class="fas fa-home mr-2"></i>새 테스트 시작
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <!-- 공유 모달 -->
+    <div id="shareModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>결과 공유</h3>
+                <button id="closeShareModal" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">공유 링크</label>
+                        <div class="flex">
+                            <input type="text" id="shareUrl" readonly 
+                                   class="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button id="copyLinkBtn" class="px-4 py-2 bg-blue-600 text-white rounded-r-md hover:bg-blue-700">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex space-x-4">
+                        <button id="shareEmailBtn" class="btn-secondary flex-1">
+                            <i class="fas fa-envelope mr-2"></i>이메일
+                        </button>
+                        <button id="shareKakaoBtn" class="btn-secondary flex-1">
+                            <i class="fas fa-comment mr-2"></i>카카오톡
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript 파일들 -->
+    <script src="../js/firebase-config.js?v=4"></script>
+
+    <script>
+        // Firebase 초기화 확인 및 설정
+        if (typeof firebase === 'undefined') {
+            console.error('Firebase가 로드되지 않았습니다.');
+        }
+
+        // firebase-config.js에서 이미 초기화되었는지 확인
+        let db;
+        if (window.db) {
+            db = window.db;
+        } else {
+            // 직접 초기화
+            const firebaseConfig = {
+                apiKey: "AIzaSyBlWpLtgheMHHShh_ZOE43PD_zhfi3i-mo",
+                authDomain: "e-dictation-d679a.firebaseapp.com",
+                projectId: "e-dictation-d679a",
+                storageBucket: "e-dictation-d679a.firebasestorage.app",
+                messagingSenderId: "585034180982",
+                appId: "1:585034180982:web:f5ff6fcee0c04a6bf6b257",
+                measurementId: "G-W8TB4B8VNQ"
+            };
+
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            db = firebase.firestore();
+        }
+
+        let testData = null;
+        let participantData = null;
+        let scoreChart = null;
+
+        // 세션 데이터
+        const studentSession = JSON.parse(sessionStorage.getItem('studentSession') || '{}');
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            // 세션 검증
+            if (!validateSession()) {
+                alert('유효하지 않은 접근입니다. 다시 로그인해주세요.');
+                window.location.href = '../index.html';
+                return;
+            }
+
+            initializeResult();
+            initializeEventListeners();
+        });
+
+        // 세션 유효성 검증
+        function validateSession() {
+            console.log('세션 검증 시작');
+            console.log('studentSession:', studentSession);
+            
+            if (!studentSession || !studentSession.testCode || !studentSession.participantId) {
+                console.error('세션 정보가 없습니다. studentSession:', studentSession);
+                return false;
+            }
+
+            // 세션 만료 검증
+            if (studentSession.expiresAt && Date.now() > studentSession.expiresAt) {
+                console.error('세션이 만료되었습니다.');
+                sessionStorage.removeItem('studentSession');
+                sessionStorage.removeItem('studentInfo');
+                return false;
+            }
+
+            // 인증 시간 검증 (최근 24시간 내)
+            if (!studentSession.authenticatedAt || (Date.now() - studentSession.authenticatedAt) > (24 * 60 * 60 * 1000)) {
+                console.error('인증이 만료되었습니다.');
+                return false;
+            }
+
+            console.log('세션 검증 성공');
+            return true;
+        }
+
+        // 결과 초기화
+        async function initializeResult() {
+            try {
+                document.getElementById('loadingSpinner').style.display = 'flex';
+                
+                // 테스트 및 참여자 데이터 로드
+                await loadResultData();
+                
+                // UI 렌더링
+                renderResultSummary();
+                renderDetailedStats();
+                renderAnswersList();
+                renderSuggestions();
+                
+                document.getElementById('loadingSpinner').style.display = 'none';
+                document.getElementById('resultContent').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('결과 로드 오류:', error);
+                alert('결과를 불러오는 중 오류가 발생했습니다: ' + error.message);
+                window.location.href = '../index.html';
+            }
+        }
+
+        // 결과 데이터 로드
+        async function loadResultData() {
+            console.log('결과 데이터 로드 시작');
+            console.log('학생 세션:', studentSession);
+            
+            try {
+                // 테스트 데이터 로드
+                console.log('테스트 코드로 문서 조회:', studentSession.testCode);
+                const testDoc = await db.collection('tests').doc(studentSession.testCode).get();
+                if (!testDoc.exists) {
+                    console.error('테스트 문서가 존재하지 않음');
+                    throw new Error('테스트를 찾을 수 없습니다.');
+                }
+                testData = testDoc.data();
+                console.log('로드된 테스트 데이터:', testData);
+
+                // 참여자 데이터는 테스트 문서의 participants 필드에서 가져오기
+                const participants = testData.participants || {};
+                console.log('전체 참여자 데이터:', participants);
+                participantData = participants[studentSession.participantId];
+                console.log('현재 학생 데이터:', participantData);
+                
+                if (!participantData) {
+                    console.error('참여자 정보 없음. 참여자 ID:', studentSession.participantId);
+                    throw new Error('참여자 정보를 찾을 수 없습니다.');
+                }
+
+                // 완료되지 않은 테스트 체크
+                if (participantData.status !== 'completed') {
+                    console.warn('테스트가 완료되지 않음. 현재 상태:', participantData.status);
+                    throw new Error('아직 완료되지 않은 테스트입니다.');
+                }
+                
+                console.log('결과 데이터 로드 성공');
+            } catch (error) {
+                console.error('결과 데이터 로드 오류:', error);
+                throw error;
+            }
+        }
+
+        // 결과 요약 렌더링
+        function renderResultSummary() {
+            // 기본 정보
+            document.getElementById('testTitle').textContent = testData.title || '받아쓰기 테스트';
+            document.getElementById('studentInfo').textContent = 
+                `${participantData.name} (${participantData.studentId})`;
+            
+            // 완료 시간
+            if (participantData.completedAt) {
+                const completedTime = participantData.completedAt.toDate ? participantData.completedAt.toDate() : new Date(participantData.completedAt);
+                document.getElementById('completedTime').textContent = 
+                    '완료 시간: ' + completedTime.toLocaleString('ko-KR');
+            }
+
+            // 점수 및 통계
+            const finalScore = participantData.finalScore || 0;
+            const correctCount = participantData.correctAnswers || 0;
+            const totalQuestions = testData.sentences?.length || 0;
+            const incorrectCount = totalQuestions - correctCount;
+            const duration = participantData.duration || 0;
+
+            document.getElementById('finalScore').textContent = finalScore + '%';
+            document.getElementById('correctCount').textContent = correctCount;
+            document.getElementById('incorrectCount').textContent = incorrectCount;
+            document.getElementById('totalQuestions').textContent = totalQuestions;
+            document.getElementById('testDuration').textContent = duration + '분';
+
+            // 점수 원형 차트 애니메이션
+            animateScoreCircle(finalScore);
+
+            // 재시도 버튼 표시 여부
+            if (testData.settings?.allowRetries) {
+                document.getElementById('retryTestBtn').classList.remove('hidden');
+            }
+        }
+
+        // 점수 원형 차트 애니메이션
+        function animateScoreCircle(score) {
+            const circle = document.getElementById('scoreCircle');
+            const circumference = 339.3; // 2 * π * 54
+            const offset = circumference - (score / 100) * circumference;
+            
+            setTimeout(() => {
+                circle.style.strokeDashoffset = offset;
+            }, 500);
+        }
+
+        // 상세 통계 렌더링
+        function renderDetailedStats() {
+            // 난이도별 분석
+            renderDifficultyStats();
+            
+            // 점수 분포 차트
+            renderScoreChart();
+        }        // 난이도별 통계 렌더링
+        function renderDifficultyStats() {
+            const difficultyData = {};
+            
+            // 난이도별 데이터 집계
+            testData.sentences?.forEach((sentence, index) => {
+                const difficulty = sentence.difficulty || 'medium';
+                if (!difficultyData[difficulty]) {
+                    difficultyData[difficulty] = { total: 0, correct: 0, totalScore: 0 };
+                }
+                
+                difficultyData[difficulty].total++;
+                
+                // 해당 인덱스의 답안 찾기 (questionIndex로 매칭)
+                let answer = null;
+                if (participantData.answers) {
+                    answer = participantData.answers.find(ans => ans.questionIndex === index) || 
+                             participantData.answers[index]; // 폴백으로 배열 인덱스 사용
+                }
+                
+                if (answer) {
+                    if (answer.isCorrect) difficultyData[difficulty].correct++;
+                    difficultyData[difficulty].totalScore += answer.score || 0;
+                }
+            });
+
+            const container = document.getElementById('difficultyStats');
+            container.innerHTML = Object.entries(difficultyData).map(([difficulty, data]) => {
+                const accuracy = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0;
+                const averageScore = data.total > 0 ? Math.round(data.totalScore / data.total) : 0;
+                
+                return `
+                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <span class="difficulty-badge difficulty-${difficulty}">${getDifficultyText(difficulty)}</span>
+                            <span class="text-sm text-gray-600">${data.total}문제</span>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="text-sm">
+                                <span class="font-medium">${data.correct}/${data.total}</span>
+                                <span class="text-gray-500">정답</span>
+                            </div>
+                            <div class="text-sm">
+                                <span class="font-medium text-blue-600">${averageScore}%</span>
+                                <span class="text-gray-500">평균</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 점수 분포 차트 렌더링
+        function renderScoreChart() {
+            const ctx = document.getElementById('scoreChart').getContext('2d');
+            
+            // 점수 구간별 데이터 준비
+            const scoreRanges = {
+                '90-100': 0,
+                '80-89': 0,
+                '70-79': 0,
+                '60-69': 0,
+                '0-59': 0
+            };
+
+            participantData.answers?.forEach(answer => {
+                const score = answer.score || 0;
+                if (score >= 90) scoreRanges['90-100']++;
+                else if (score >= 80) scoreRanges['80-89']++;
+                else if (score >= 70) scoreRanges['70-79']++;
+                else if (score >= 60) scoreRanges['60-69']++;
+                else scoreRanges['0-59']++;
+            });
+
+            if (scoreChart) {
+                scoreChart.destroy();
+            }
+
+            scoreChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(scoreRanges),
+                    datasets: [{
+                        data: Object.values(scoreRanges),
+                        backgroundColor: [
+                            '#22c55e',
+                            '#3b82f6',
+                            '#f59e0b',
+                            '#ef4444',
+                            '#6b7280'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // 답안 목록 렌더링
+        function renderAnswersList() {
+            const container = document.getElementById('answersList');
+            
+            if (!participantData.answers || participantData.answers.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 py-8">답안이 없습니다.</p>';
+                return;
+            }
+
+            let answers = [...participantData.answers];
+            
+            // 필터링 및 정렬 적용
+            answers = filterAndSortAnswers(answers);
+            
+            container.innerHTML = answers.map((answer, index) => {                const sentence = testData.sentences[answer.questionIndex];
+                const cardClass = getAnswerCardClass(answer.score);
+                
+                return `
+                    <div class="answer-card ${cardClass} rounded-lg p-6">
+                        <div class="flex items-start justify-between mb-4">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-lg font-semibold text-gray-700">문제 ${answer.questionIndex + 1}</span>
+                                <span class="difficulty-badge difficulty-${sentence?.difficulty || 'medium'}">
+                                    ${getDifficultyText(sentence?.difficulty || 'medium')}
+                                </span>
+                                <span class="text-sm text-gray-500">
+                                    재생 ${answer.playCount || 0}회
+                                </span>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold ${getScoreColor(answer.score)}">${answer.score || 0}%</div>
+                                <div class="text-sm text-gray-500">${answer.isCorrect ? '정답' : '오답'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-sm font-medium text-gray-600">원문:</label>
+                                <p class="text-gray-900 mt-1">${sentence?.text || '알 수 없음'}</p>
+                            </div>
+                            
+                            <div>
+                                <label class="text-sm font-medium text-gray-600">입력한 답안:</label>
+                                <p class="text-gray-900 mt-1">${answer.userAnswer || '(답안 없음)'}</p>
+                            </div>
+                            
+                            ${!answer.isCorrect && answer.feedback ? `
+                                <div>
+                                    <label class="text-sm font-medium text-gray-600">피드백:</label>
+                                    <p class="text-gray-700 mt-1">${answer.feedback}</p>
+                                </div>
+                            ` : ''}
+                            
+                            <div class="flex items-center justify-between text-xs text-gray-500 pt-2 border-t">
+                                <span>제출 시간: ${formatTime(answer.submittedAt)}</span>
+                                <button class="text-blue-600 hover:text-blue-800" onclick="playAnswerAudio('${sentence?.text || ''}')">
+                                    <i class="fas fa-volume-up mr-1"></i>다시 듣기
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }        // 답안 필터링 및 정렬
+        function filterAndSortAnswers(answers) {
+            const filterType = document.getElementById('filterType').value;
+            const sortBy = document.getElementById('sortBy').value;
+            
+            // 필터링
+            let filtered = answers.filter(answer => {
+                switch (filterType) {
+                    case 'correct':
+                        return answer.isCorrect;
+                    case 'incorrect':
+                        return !answer.isCorrect;
+                    case 'partial':
+                        return !answer.isCorrect && (answer.score || 0) > 0;
+                    default:
+                        return true;
+                }
+            });
+            
+            // 정렬
+            filtered.sort((a, b) => {
+                switch (sortBy) {
+                    case 'score':
+                        return (b.score || 0) - (a.score || 0);
+                    case 'difficulty':
+                        const difficultyOrder = { easy: 1, medium: 2, hard: 3 };
+                        const aIndex = a.questionIndex !== undefined ? a.questionIndex : answers.indexOf(a);
+                        const bIndex = b.questionIndex !== undefined ? b.questionIndex : answers.indexOf(b);
+                        const aDiff = testData.sentences[aIndex]?.difficulty || 'medium';
+                        const bDiff = testData.sentences[bIndex]?.difficulty || 'medium';
+                        return difficultyOrder[aDiff] - difficultyOrder[bDiff];
+                    default: // order
+                        const aOrderIndex = a.questionIndex !== undefined ? a.questionIndex : answers.indexOf(a);
+                        const bOrderIndex = b.questionIndex !== undefined ? b.questionIndex : answers.indexOf(b);
+                        return aOrderIndex - bOrderIndex;
+                }
+            });
+            
+            return filtered;
+        }
+
+        // 학습 제안 렌더링
+        function renderSuggestions() {
+            const suggestions = generateSuggestions();
+            const container = document.getElementById('suggestions');
+            
+            container.innerHTML = suggestions.map(suggestion => `
+                <div class="flex items-start space-x-3 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <i class="${suggestion.icon} text-yellow-600 mt-1"></i>
+                    <div>
+                        <h4 class="font-medium text-gray-900">${suggestion.title}</h4>
+                        <p class="text-sm text-gray-600 mt-1">${suggestion.description}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 학습 제안 생성
+        function generateSuggestions() {
+            const suggestions = [];
+            const finalScore = participantData.finalScore || 0;
+            const answers = participantData.answers || [];
+            
+            // 점수 기반 제안
+            if (finalScore < 60) {
+                suggestions.push({
+                    icon: 'fas fa-book',
+                    title: '기초 학습 필요',
+                    description: '영어 기초 문법과 어휘 학습을 먼저 진행하시는 것을 추천합니다.'
+                });
+            } else if (finalScore < 80) {
+                suggestions.push({
+                    icon: 'fas fa-headphones',
+                    title: '듣기 연습 강화',
+                    description: '영어 듣기 연습을 더 많이 하여 음성 인식 능력을 향상시켜보세요.'
+                });
+            } else {
+                suggestions.push({
+                    icon: 'fas fa-trophy',
+                    title: '훌륭한 결과!',
+                    description: '좋은 점수입니다. 더 어려운 난이도에 도전해보세요.'
+                });
+            }            // 난이도별 분석 기반 제안
+            const difficultyStats = {};
+            testData.sentences?.forEach((sentence, index) => {
+                const difficulty = sentence.difficulty || 'medium';
+                if (!difficultyStats[difficulty]) {
+                    difficultyStats[difficulty] = { total: 0, correct: 0 };
+                }
+                difficultyStats[difficulty].total++;
+                
+                // 해당 인덱스의 답안 찾기
+                let answer = null;
+                if (answers && answers.length > 0) {
+                    answer = answers.find(ans => ans.questionIndex === index) || answers[index];
+                }
+                
+                if (answer?.isCorrect) {
+                    difficultyStats[difficulty].correct++;
+                }
+            });
+
+            Object.entries(difficultyStats).forEach(([difficulty, stats]) => {
+                const accuracy = stats.total > 0 ? (stats.correct / stats.total) * 100 : 0;
+                if (accuracy < 70) {
+                    suggestions.push({
+                        icon: 'fas fa-target',
+                        title: `${getDifficultyText(difficulty)} 난이도 보완`,
+                        description: `${getDifficultyText(difficulty)} 난이도 문제에서 정확도가 낮습니다. 해당 수준의 문제를 더 연습해보세요.`
+                    });
+                }
+            });
+
+            // 재생 횟수 기반 제안
+            const avgPlayCount = answers.reduce((sum, answer) => sum + (answer.playCount || 0), 0) / answers.length;
+            if (avgPlayCount > 2) {
+                suggestions.push({
+                    icon: 'fas fa-ear',
+                    title: '집중력 향상',
+                    description: '음성을 여러 번 재생하는 경우가 많습니다. 집중해서 한 번에 듣기 연습을 해보세요.'
+                });
+            }
+
+            return suggestions;
+        }
+
+        // 이벤트 리스너 초기화
+        function initializeEventListeners() {
+            // 필터 및 정렬 변경
+            document.getElementById('filterType').addEventListener('change', renderAnswersList);
+            document.getElementById('sortBy').addEventListener('change', renderAnswersList);
+
+            // 버튼 이벤트
+            document.getElementById('printBtn').addEventListener('click', printResult);
+            document.getElementById('shareBtn').addEventListener('click', openShareModal);
+            document.getElementById('downloadResultBtn').addEventListener('click', downloadResult);
+            document.getElementById('retryTestBtn').addEventListener('click', retryTest);
+
+            // 공유 모달 이벤트
+            document.getElementById('closeShareModal').addEventListener('click', () => {
+                document.getElementById('shareModal').style.display = 'none';
+            });
+
+            document.getElementById('copyLinkBtn').addEventListener('click', copyShareLink);
+        }
+
+        // 음성 재생
+        window.playAnswerAudio = function(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = testData.settings?.speakingRate || 1.0;
+                speechSynthesis.speak(utterance);
+            } else {
+                alert('음성 재생을 지원하지 않는 브라우저입니다.');
+            }
+        };
+
+        // 결과 인쇄
+        function printResult() {
+            window.print();
+        }
+
+        // 공유 모달 열기
+        function openShareModal() {
+            const shareUrl = `${window.location.origin}/student/result.html?test=${studentSession.testCode}&participant=${studentSession.participantId}`;
+            document.getElementById('shareUrl').value = shareUrl;
+            document.getElementById('shareModal').style.display = 'flex';
+        }
+
+        // 공유 링크 복사
+        async function copyShareLink() {
+            const shareUrl = document.getElementById('shareUrl').value;
+            
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                alert('링크가 클립보드에 복사되었습니다.');
+            } catch (err) {
+                // 폴백: 텍스트 선택
+                document.getElementById('shareUrl').select();
+                document.execCommand('copy');
+                alert('링크가 복사되었습니다.');
+            }
+        }
+
+        // 결과 다운로드
+        function downloadResult() {
+            const resultData = generateResultReport();
+            const blob = new Blob([resultData], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `dictation_result_${studentSession.testCode}_${participantData.name}.txt`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        // 결과 보고서 생성
+        function generateResultReport() {
+            const report = [];
+            
+            report.push('='.repeat(50));
+            report.push('영어 받아쓰기 테스트 결과');
+            report.push('='.repeat(50));
+            report.push('');
+            
+            // 기본 정보
+            report.push(`테스트: ${testData.title}`);
+            report.push(`학생: ${participantData.name} (${participantData.studentId})`);
+            report.push(`완료 시간: ${participantData.completedAt?.toDate().toLocaleString('ko-KR')}`);
+            report.push(`소요 시간: ${participantData.duration}분`);
+            report.push('');
+            
+            // 점수 정보
+            report.push('[ 점수 정보 ]');
+            report.push(`최종 점수: ${participantData.finalScore}%`);
+            report.push(`정답/전체: ${participantData.correctAnswers}/${testData.sentences?.length}`);
+            report.push('');
+              // 상세 답안
+            report.push('[ 상세 답안 ]');
+            participantData.answers?.forEach((answer, index) => {
+                const questionIndex = answer.questionIndex !== undefined ? answer.questionIndex : index;
+                const sentence = testData.sentences[questionIndex];
+                report.push(`문제 ${questionIndex + 1}: ${answer.score}% (${answer.isCorrect ? '정답' : '오답'})`);
+                report.push(`  원문: ${sentence?.text}`);
+                report.push(`  답안: ${answer.userAnswer}`);
+                if (!answer.isCorrect && answer.feedback) {
+                    report.push(`  피드백: ${answer.feedback}`);
+                }
+                report.push('');
+            });
+            
+            return report.join('\n');
+        }
+
+        // 테스트 재시도
+        function retryTest() {
+            if (confirm('테스트를 다시 시작하시겠습니까?')) {
+                window.location.href = `dictation.html?test=${studentSession.testCode}`;
+            }
+        }
+
+        // 유틸리티 함수들
+        function getDifficultyText(difficulty) {
+            const map = { easy: '쉬움', medium: '보통', hard: '어려움' };
+            return map[difficulty] || '보통';
+        }
+
+        function getAnswerCardClass(score) {
+            if (score === 100) return 'correct-answer';
+            if (score > 0) return 'partial-answer';
+            return 'incorrect-answer';
+        }
+
+        function getScoreColor(score) {
+            if (score >= 90) return 'text-green-600';
+            if (score >= 80) return 'text-blue-600';
+            if (score >= 70) return 'text-yellow-600';
+            return 'text-red-600';
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return '알 수 없음';
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleString('ko-KR');
+        }
+
+        // 직접 URL 접근 차단
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const hasCodeParam = urlParams.has('code');
+            const hasValidSession = sessionStorage.getItem('studentSession');
+            
+            // URL에 테스트 코드가 있거나 세션이 없으면 접근 차단
+            if (hasCodeParam || !hasValidSession) {
+                alert('잘못된 접근입니다. 정상적인 경로로 접속해주세요.');
+                window.location.href = '../index.html';
+                return;
+            }
+        })();
+    </script>
+</body>
+</html>

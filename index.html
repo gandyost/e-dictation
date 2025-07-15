@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English Dictation Web App</title>
+    
+    <!-- Meta tags for SEO and PWA -->
+    <meta name="description" content="영어 받아쓰기 학습 플랫폼 - 음성으로 듣고 정확히 입력하는 영어 학습 도구">
+    <meta name="keywords" content="영어, 받아쓰기, 학습, 교육, 음성인식, dictation">    <meta name="author" content="English Dictation Team">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="shortcut icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="apple-touch-icon" href="favicon.svg">
+      <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-analytics-compat.js"></script>
+      <!-- Firebase Configuration - Firebase SDK 바로 다음에 로드 -->
+    <script src="js/firebase-config.js?v=4"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <!-- 헤더 -->
+    <header class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div class="flex items-center">
+                    <h1 class="text-3xl font-bold text-gray-900">
+                        📝 English Dictation
+                    </h1>
+                </div>
+                <div class="text-sm text-gray-500">
+                    영어 받아쓰기 학습 플랫폼
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="text-center mb-12">
+            <h2 class="text-4xl font-bold text-gray-900 mb-4">
+                환영합니다! 👋
+            </h2>
+            <p class="text-xl text-gray-600 mb-8">
+                음성으로 듣고 정확히 입력하는 영어 받아쓰기 학습을 시작해보세요
+            </p>
+        </div>
+
+        <!-- 선택 카드 -->
+        <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <!-- 교사 카드 -->
+            <div class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-shadow duration-300 border-2 border-transparent hover:border-blue-200">
+                <div class="text-center">
+                    <div class="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6">
+                        <span class="text-2xl">👩‍🏫</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-900 mb-4">교사</h3>
+                    <p class="text-gray-600 mb-6">
+                        테스트를 생성하고 학생들의 진행 상황을 모니터링하세요
+                    </p>
+                    <ul class="text-sm text-gray-500 mb-6 text-left space-y-2">
+                        <li>✅ 받아쓰기 테스트 생성</li>
+                        <li>✅ 실시간 진행 상황 모니터링</li>
+                        <li>✅ 학생 결과 분석 및 통계</li>
+                        <li>✅ 테스트 코드 관리</li>
+                    </ul>
+                    <button 
+                        onclick="showTeacherLogin()"
+                        class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300"
+                    >
+                        교사 로그인
+                    </button>
+                </div>
+            </div>
+
+            <!-- 학생 카드 -->
+            <div class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-shadow duration-300 border-2 border-transparent hover:border-green-200">
+                <div class="text-center">
+                    <div class="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
+                        <span class="text-2xl">🎓</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-900 mb-4">학생</h3>
+                    <p class="text-gray-600 mb-6">
+                        테스트 코드를 입력하고 받아쓰기 테스트에 참여하세요
+                    </p>
+                    <ul class="text-sm text-gray-500 mb-6 text-left space-y-2">
+                        <li>✅ 테스트 코드로 간편 접속</li>
+                        <li>✅ 음성 듣고 받아쓰기</li>
+                        <li>✅ 실시간 자동 채점</li>
+                        <li>✅ 개인 결과 확인</li>
+                    </ul>
+                    <button 
+                        onclick="showStudentJoin()"
+                        class="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition-colors duration-300"
+                    >
+                        테스트 참여
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 특징 섹션 -->
+        <div class="mt-16 text-center">
+            <h3 class="text-2xl font-bold text-gray-900 mb-8">주요 특징</h3>
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-lg p-6 shadow-md">
+                    <div class="text-3xl mb-4">🎯</div>
+                    <h4 class="font-semibold text-gray-900 mb-2">정확한 채점</h4>
+                    <p class="text-gray-600 text-sm">AI 기반 자동 채점으로 정확하고 빠른 결과 제공</p>
+                </div>
+                <div class="bg-white rounded-lg p-6 shadow-md">
+                    <div class="text-3xl mb-4">📊</div>
+                    <h4 class="font-semibold text-gray-900 mb-2">실시간 모니터링</h4>
+                    <p class="text-gray-600 text-sm">학생들의 진행 상황을 실시간으로 확인</p>
+                </div>
+                <div class="bg-white rounded-lg p-6 shadow-md">
+                    <div class="text-3xl mb-4">📱</div>
+                    <h4 class="font-semibold text-gray-900 mb-2">모든 기기 지원</h4>
+                    <p class="text-gray-600 text-sm">PC, 태블릿, 스마트폰에서 자유롭게 사용</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 교사 로그인 모달 -->
+    <div id="teacherModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+            <div class="text-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-900 mb-2">교사 로그인</h3>
+                <p class="text-gray-600">계정에 로그인하여 테스트를 관리하세요</p>
+            </div>
+            
+            <form id="teacherLoginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+                    <input 
+                        type="email" 
+                        id="teacherEmail"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="teacher@example.com"
+                        required
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                    <input 
+                        type="password" 
+                        id="teacherPassword"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="••••••••"
+                        required
+                    >
+                </div>
+                <div class="flex space-x-3">
+                    <button 
+                        type="submit"
+                        class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                        로그인
+                    </button>
+                    <button 
+                        type="button"
+                        onclick="showTeacherSignup()"
+                        class="flex-1 bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 transition-colors"
+                    >
+                        회원가입
+                    </button>
+                </div>
+            </form>
+            
+            <button 
+                onclick="hideTeacherModal()"
+                class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+                ✕
+            </button>
+        </div>
+    </div>
+
+    <!-- 학생 테스트 코드 입력 모달 -->
+    <div id="studentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+            <div class="text-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-900 mb-2">테스트 참여</h3>
+                <p class="text-gray-600">교사가 제공한 6자리 테스트 코드를 입력하세요</p>
+            </div>
+            
+            <form id="studentJoinForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">테스트 코드</label>
+                    <input 
+                        type="text" 
+                        id="testCode"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-center text-lg font-mono uppercase"
+                        placeholder="ABC123"
+                        maxlength="6"
+                        pattern="[A-Z0-9]{6}"
+                        required
+                    >
+                    <p class="text-xs text-gray-500 mt-1">예: ABC123 (대문자와 숫자 6자리)</p>
+                </div>
+                <button 
+                    type="submit"
+                    class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors"
+                >
+                    테스트 입장
+                </button>
+            </form>
+            
+            <button 
+                onclick="hideStudentModal()"
+                class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+                ✕
+            </button>
+        </div>
+    </div>
+
+    <!-- 로딩 스피너 -->
+    <div id="loadingSpinner" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span>처리 중...</span>
+        </div>
+    </div>    <!-- JavaScript 파일들 -->
+    <script src="js/test-code.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/accessibility.js"></script>
+    <script src="js/performance.js"></script>
+    
+    <script>
+        // 페이지 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+            setupEventListeners();
+            checkPerformance();
+        });
+
+        // 앱 초기화
+        async function initializeApp() {
+            try {
+                // Service Worker 등록 (HTTPS 또는 localhost에서만)
+                if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+                    try {
+                        const registration = await navigator.serviceWorker.register('/sw.js');
+                        console.log('Service Worker 등록 성공:', registration);
+                    } catch (swError) {
+                        console.warn('Service Worker 등록 실패 (무시됨):', swError.message);
+                    }
+                } else {
+                    console.log('Service Worker는 HTTPS 또는 localhost에서만 지원됩니다.');
+                }
+
+                // Firebase 초기화 확인
+                if (typeof firebase !== 'undefined') {
+                    console.log('Firebase 초기화 완료');
+                }
+
+                // 접근성 향상
+                if (typeof AccessibilityManager !== 'undefined') {
+                    window.accessibilityManager = new AccessibilityManager();
+                }
+
+                // 성능 최적화
+                if (typeof PerformanceOptimizer !== 'undefined') {
+                    window.performanceOptimizer = new PerformanceOptimizer();
+                }
+
+            } catch (error) {
+                console.error('앱 초기화 오류:', error);
+            }
+        }        // 이벤트 리스너 설정
+        function setupEventListeners() {
+            // 온라인/오프라인 상태
+            window.addEventListener('online', handleOnlineStatus);
+            window.addEventListener('offline', handleOfflineStatus);
+            
+            // 키보드 접근성
+            document.addEventListener('keydown', handleKeyboardNavigation);
+        }
+
+        // 성능 확인
+        function checkPerformance() {
+            // 느린 네트워크 감지
+            if ('connection' in navigator) {
+                const connection = navigator.connection;
+                if (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g') {
+                    showLowBandwidthNotice();
+                }
+            }
+        }
+
+        // PWA 설치 프롬프트 처리        // 온라인 상태 처리
+        function handleOnlineStatus() {
+            hideOfflineNotice();
+            showNotification('인터넷 연결이 복구되었습니다.', 'success');
+        }
+
+        function handleOfflineStatus() {
+            showOfflineNotice();
+        }
+
+        function showOfflineNotice() {
+            const notice = document.createElement('div');
+            notice.id = 'offline-notice';
+            notice.className = 'fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-50';
+            notice.innerHTML = '<i class="fas fa-wifi-slash mr-2"></i>오프라인 상태입니다. 일부 기능이 제한될 수 있습니다.';
+            document.body.appendChild(notice);
+        }
+
+        function hideOfflineNotice() {
+            const notice = document.getElementById('offline-notice');
+            if (notice) {
+                notice.remove();
+            }
+        }
+
+        function showLowBandwidthNotice() {
+            const notice = document.createElement('div');
+            notice.className = 'fixed top-16 left-4 right-4 bg-yellow-600 text-white p-3 rounded-lg z-40';
+            notice.innerHTML = '<i class="fas fa-signal mr-2"></i>느린 네트워크가 감지되었습니다. 일부 기능이 최적화됩니다.';
+            document.body.appendChild(notice);
+            
+            setTimeout(() => notice.remove(), 5000);
+        }
+
+        // 키보드 네비게이션
+        function handleKeyboardNavigation(e) {
+            if (e.key === 'Tab') {
+                document.body.classList.add('keyboard-navigation');
+            }
+        }
+
+        // 알림 표시
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+                type === 'success' ? 'bg-green-500 text-white' :
+                type === 'error' ? 'bg-red-500 text-white' :
+                'bg-blue-500 text-white'
+            }`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // 모달 관련 함수들
+        function showTeacherLogin() {
+            document.getElementById('teacherModal').classList.remove('hidden');
+            document.getElementById('teacherModal').classList.add('flex');
+            
+            // 접근성: 첫 번째 입력 필드에 포커스
+            setTimeout(() => {
+                const firstInput = document.querySelector('#teacherModal input');
+                if (firstInput) firstInput.focus();
+            }, 100);
+        }
+
+        function hideTeacherModal() {
+            document.getElementById('teacherModal').classList.add('hidden');
+            document.getElementById('teacherModal').classList.remove('flex');
+        }
+
+        function showStudentJoin() {
+            document.getElementById('studentModal').classList.remove('hidden');
+            document.getElementById('studentModal').classList.add('flex');
+            
+            // 접근성: 첫 번째 입력 필드에 포커스
+            setTimeout(() => {
+                const firstInput = document.querySelector('#studentModal input');
+                if (firstInput) firstInput.focus();
+            }, 100);
+        }
+
+        function hideStudentModal() {
+            document.getElementById('studentModal').classList.add('hidden');
+            document.getElementById('studentModal').classList.remove('flex');
+        }
+
+        function showLoading() {
+            document.getElementById('loadingSpinner').classList.remove('hidden');
+            document.getElementById('loadingSpinner').classList.add('flex');
+        }        function hideLoading() {
+            document.getElementById('loadingSpinner').classList.add('hidden');
+            document.getElementById('loadingSpinner').classList.remove('flex');
+        }        // 테스트 코드 입력 자동 대문자 변환
+        document.getElementById('testCode').addEventListener('input', function(e) {
+            e.target.value = e.target.value.toUpperCase();
+        });
+
+        // 글로벌 에러 핸들러
+        window.addEventListener('error', function(event) {
+            console.error('Global error caught:', event.error);
+            
+            // 사용자에게 친화적인 에러 메시지 표시
+            if (!document.querySelector('.error-notification')) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-notification fixed top-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg z-50 max-w-sm';
+                errorDiv.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <div>
+                            <div class="font-semibold">오류가 발생했습니다</div>
+                            <div class="text-sm opacity-90">페이지를 새로고침해주세요</div>
+                        </div>
+                        <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                document.body.appendChild(errorDiv);
+                
+                // 5초 후 자동 제거
+                setTimeout(() => {
+                    if (errorDiv.parentElement) {
+                        errorDiv.remove();
+                    }
+                }, 5000);
+            }
+        });
+
+        // Promise rejection 핸들러
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+            event.preventDefault(); // 기본 에러 표시 방지
+        });
+
+        // 성능 모니터링
+        if ('performance' in window) {
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    const perfData = window.performance.timing;
+                    const loadTime = perfData.loadEventEnd - perfData.navigationStart;
+                    console.log('Page load time:', loadTime + 'ms');
+                    
+                    // 로드 시간이 3초 이상이면 경고
+                    if (loadTime > 3000) {
+                        console.warn('Slow page load detected:', loadTime + 'ms');
+                    }
+                }, 0);
+            });
+        }
+    </script>
+</body>
+</html>
