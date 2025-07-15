@@ -69,9 +69,11 @@
     <!-- 헤더 -->
     <header class="bg-white shadow-sm border-b no-print">
         <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
-                <div class="flex items-center">
+            <div class="flex justify-between items-center h-16">                <div class="flex items-center">
                     <h1 class="text-xl font-semibold text-gray-900">테스트 결과</h1>
+                    <span id="teacherViewBadge" class="hidden ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                        <i class="fas fa-user-tie mr-1"></i>교사용 보기
+                    </span>
                     <span id="studentInfo" class="ml-4 text-sm text-gray-600"></span>
                 </div>
                 <div class="flex items-center space-x-4">
@@ -290,25 +292,42 @@
 
         let testData = null;
         let participantData = null;
-        let scoreChart = null;
-
-        // 세션 데이터
-        const studentSession = JSON.parse(sessionStorage.getItem('studentSession') || '{}');
+        let scoreChart = null;        // 세션 데이터
+        let studentSession = JSON.parse(sessionStorage.getItem('studentSession') || '{}');
+        
+        // URL 파라미터에서 교사용 접근 체크
+        const urlParams = new URLSearchParams(window.location.search);
+        const isTeacherView = urlParams.get('view') === 'teacher';
+        const urlTestCode = urlParams.get('test');
+        const urlStudentId = urlParams.get('student');
 
         // 페이지 로드 시 초기화
         document.addEventListener('DOMContentLoaded', function() {
+            // 교사용 접근인 경우 URL 파라미터로 세션 생성
+            if (isTeacherView && urlTestCode && urlStudentId) {
+                studentSession = {
+                    testCode: urlTestCode,
+                    participantId: urlStudentId,
+                    isTeacherView: true,
+                    authenticatedAt: Date.now()
+                };
+                console.log('교사용 접근 - URL 파라미터로 세션 생성:', studentSession);
+            }
+            
             // 세션 검증
             if (!validateSession()) {
-                alert('유효하지 않은 접근입니다. 다시 로그인해주세요.');
-                window.location.href = '../index.html';
+                alert('유효하지 않은 접근입니다. 정상적인 경로로 접근하세요.');
+                if (isTeacherView) {
+                    window.location.href = '../teacher/dashboard.html';
+                } else {
+                    window.location.href = '../index.html';
+                }
                 return;
             }
 
             initializeResult();
             initializeEventListeners();
-        });
-
-        // 세션 유효성 검증
+        });        // 세션 유효성 검증
         function validateSession() {
             console.log('세션 검증 시작');
             console.log('studentSession:', studentSession);
@@ -318,6 +337,13 @@
                 return false;
             }
 
+            // 교사용 접근인 경우 세션 만료 검증 생략
+            if (studentSession.isTeacherView) {
+                console.log('교사용 접근 - 세션 검증 성공');
+                return true;
+            }
+
+            // 일반 학생 접근의 경우 기존 검증 로직 적용
             // 세션 만료 검증
             if (studentSession.expiresAt && Date.now() > studentSession.expiresAt) {
                 console.error('세션이 만료되었습니다.');
@@ -398,10 +424,13 @@
                 console.error('결과 데이터 로드 오류:', error);
                 throw error;
             }
-        }
-
-        // 결과 요약 렌더링
+        }        // 결과 요약 렌더링
         function renderResultSummary() {
+            // 교사용 접근인 경우 배지 표시
+            if (studentSession.isTeacherView) {
+                document.getElementById('teacherViewBadge').classList.remove('hidden');
+            }
+            
             // 기본 정보
             document.getElementById('testTitle').textContent = testData.title || '받아쓰기 테스트';
             document.getElementById('studentInfo').textContent = 
